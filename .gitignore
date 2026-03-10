@@ -3,3 +3,8 @@ node_modules/
 .vercel/
 *.log
 .vercel
+
+# 3DGS files - 生のPLYは大きすぎるのでgit管理しない
+assets/splats/*.ply
+assets/omamori/**/output*/
+assets/omamori/**/output_mac/

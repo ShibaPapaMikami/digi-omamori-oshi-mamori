@@ -29,15 +29,12 @@
       font-family:'Zen Maru Gothic',sans-serif; font-size:17px; font-weight:700; color:white;
       text-shadow:0 2px 12px rgba(0,0,0,.6);
     }
-
     #hint {
       position:fixed; bottom:44px; left:0; right:0;
       text-align:center; color:rgba(255,255,255,.45);
       font-family:'Noto Sans JP',sans-serif; font-size:11px;
       pointer-events:none; transition:opacity 1.5s; letter-spacing:.5px;
     }
-
-    /* ──── iOS gyro permission ──────────────────────────── */
     #gyro-btn {
       position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
       background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3);
@@ -45,8 +42,6 @@
       font-family:'Noto Sans JP',sans-serif; font-size:13px; cursor:pointer;
       backdrop-filter:blur(12px); display:none; transition:opacity .3s;
     }
-
-    /* ──── Loading ───────────────────────────────────────── */
     #loading {
       position:fixed; inset:0; background:#0a0005;
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
@@ -59,8 +54,6 @@
     }
     @keyframes spin { to{ transform:rotate(360deg); } }
     #loading-msg { color:rgba(255,255,255,.5); font-family:'Noto Sans JP',sans-serif; font-size:12px; }
-
-    /* ──── Error ─────────────────────────────────────────── */
     #error-panel {
       position:fixed; inset:0; background:#0a0005;
       display:none; flex-direction:column; align-items:center; justify-content:center;
@@ -70,11 +63,7 @@
     #error-panel p  { color:rgba(255,255,255,.55); font-family:'Noto Sans JP',sans-serif;
       font-size:13px; text-align:center; line-height:1.8; }
     #error-panel a  { color:#F472B6; font-size:12px; text-decoration:none; }
-
-    /* ──── Tap ───────────────────────────────────────────── */
-    #tap-overlay {
-      position:fixed; inset:0; z-index:50; cursor:grab;
-    }
+    #tap-overlay { position:fixed; inset:0; z-index:50; cursor:grab; }
     #tap-overlay.grabbing { cursor:grabbing; }
   </style>
 </head>
@@ -89,14 +78,13 @@
 <div id="error-panel">
   <div class="ei">🔮</div>
   <p id="error-text">
-    3Dデータがまだ生成されていません。<br/>
-    Windows RTX 4090 で ml-sharp を実行し<br/>
-    <code style="color:#F472B6">/assets/splats/{id}.ply</code> に配置してください。
+    3Dデータを読み込めませんでした。<br/>
+    <code style="color:#F472B6">/assets/splats/{id}.spz</code><br/>
+    が存在するか確認してください。
   </p>
   <a href="index.html">← 一覧に戻る</a>
 </div>
 
-<!-- Tap/drag receives events; Three.js canvas is behind this -->
 <div id="tap-overlay"></div>
 
 <div id="ui-header">
@@ -124,10 +112,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 
 // ── URL params ───────────────────────────────────────────────
-const params    = new URLSearchParams(location.search);
-const talentId  = params.get("t") || "goto_rara";
-const talentName= decodeURIComponent(params.get("n") || "");
-const accentMap = {
+const params     = new URLSearchParams(location.search);
+const talentId   = params.get("t") || "goto_rara";
+const talentName = decodeURIComponent(params.get("n") || "");
+const accentMap  = {
   goto_rara:    "#DB2777", tasaki_sakura: "#E11D48",
   abe_kayako:   "#D97706", ushio_sarina:  "#0284C7",
   hayashi_yuka: "#7C3AED", mori_chiharu:  "#059669",
@@ -149,43 +137,37 @@ const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, W/H, 0.01, 100);
 camera.position.set(0, 0, 3);
 
-// OrbitControls（デスクトップ・ドラッグ用）
 const orbit = new OrbitControls(camera, document.getElementById("tap-overlay"));
-orbit.enableDamping  = true;
-orbit.dampingFactor  = 0.08;
-orbit.enableZoom     = true;
-orbit.minDistance    = 1;
-orbit.maxDistance    = 8;
-orbit.autoRotate     = true;
+orbit.enableDamping   = true;
+orbit.dampingFactor   = 0.08;
+orbit.enableZoom      = true;
+orbit.minDistance     = 1;
+orbit.maxDistance     = 8;
+orbit.autoRotate      = true;
 orbit.autoRotateSpeed = 0.6;
 orbit.target.set(0, 0, 0);
 
-// SparkRenderer — ml-sharp は OpenCV座標系 (x right, y down, z forward)
 const spark = new SparkRenderer({ renderer });
 scene.add(spark);
 
-// 環境光 + アクセントライト
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
 const pointLight = new THREE.PointLight(new THREE.Color(accent), 1.2, 12);
 pointLight.position.set(1, 2, 2);
 scene.add(pointLight);
 
-// ── Load .ply ────────────────────────────────────────────────
-const splatURL = `/assets/splats/${talentId}.ply`;
+// ── Load .spz ────────────────────────────────────────────────
+const splatURL = `/assets/splats/${talentId}.spz`;
 let splatMesh;
 
 try {
-  document.getElementById("loading-msg").textContent = ".ply 読み込み中...";
+  document.getElementById("loading-msg").textContent = ".spz 読み込み中...";
 
   splatMesh = new SplatMesh({ url: splatURL });
-
-  // ml-sharp 座標補正: Y反転 + Z前方
-  splatMesh.rotation.x = Math.PI;
+  splatMesh.rotation.x = Math.PI; // ml-sharp: Y軸反転
   splatMesh.position.set(0, 0, 0);
   scene.add(splatMesh);
 
-  // ロード完了を待つ
   await new Promise((resolve, reject) => {
     const check = () => {
       if (splatMesh.numSplats > 0) resolve();
@@ -193,26 +175,25 @@ try {
       else setTimeout(check, 100);
     };
     check();
-    setTimeout(()=> reject(new Error("timeout")), 30000);
+    setTimeout(() => reject(new Error("timeout")), 30000);
   });
 
-  // フェードアウト
   const loadEl = document.getElementById("loading");
   loadEl.style.opacity = "0";
-  setTimeout(()=>{ loadEl.style.display = "none"; }, 650);
+  setTimeout(() => { loadEl.style.display = "none"; }, 650);
 
 } catch(e) {
   console.error("Splat load error:", e);
-  document.getElementById("loading").style.display    = "none";
+  document.getElementById("loading").style.display     = "none";
   document.getElementById("error-panel").style.display = "flex";
 }
 
 // ── Gyroscope ────────────────────────────────────────────────
-const isTouch   = "ontouchstart" in window;
-const hint      = document.getElementById("hint");
-const gyroBtn   = document.getElementById("gyro-btn");
+const isTouch    = "ontouchstart" in window;
+const hint       = document.getElementById("hint");
+const gyroBtn    = document.getElementById("gyro-btn");
 let   gyroActive = false;
-let   baseAlpha = null, baseBeta = null, baseGamma = null;
+let   baseAlpha  = null, baseBeta = null, baseGamma = null;
 let   targetRotX = 0, targetRotY = 0;
 
 function onOrientation(e) {
@@ -220,7 +201,6 @@ function onOrientation(e) {
   if (baseAlpha === null) {
     baseAlpha = e.alpha; baseBeta = e.beta; baseGamma = e.gamma; return;
   }
-  // 傾き → ターゲット角度（ラジアン）
   targetRotX =  (e.beta  - baseBeta)  * (Math.PI / 180) * 0.7;
   targetRotY =  (e.gamma - baseGamma) * (Math.PI / 180) * 0.7;
 }
@@ -228,48 +208,43 @@ function onOrientation(e) {
 async function enableGyro() {
   if (typeof DeviceOrientationEvent !== "undefined" &&
       typeof DeviceOrientationEvent.requestPermission === "function") {
-    const perm = await DeviceOrientationEvent.requestPermission().catch(()=>"denied");
+    const perm = await DeviceOrientationEvent.requestPermission().catch(() => "denied");
     if (perm !== "granted") return;
   }
   window.addEventListener("deviceorientation", onOrientation, true);
   gyroActive = true;
-  orbit.autoRotate = false;   // ジャイロON中は自動回転OFF
+  orbit.autoRotate = false;
   gyroBtn.style.display = "none";
-  hint.textContent      = "📱 スマホを傾けて視点を変えよう";
-  setTimeout(()=>{ hint.style.opacity = "0"; }, 3500);
+  hint.textContent = "📱 スマホを傾けて視点を変えよう";
+  setTimeout(() => { hint.style.opacity = "0"; }, 3500);
 }
 
 if (isTouch) {
-  // iOS: 最初のタップでダイアログ表示
   if (typeof DeviceOrientationEvent !== "undefined" &&
       typeof DeviceOrientationEvent.requestPermission === "function") {
     gyroBtn.style.display = "block";
     gyroBtn.addEventListener("click", enableGyro);
     hint.textContent = "下のボタンでジャイロを有効にできます";
   } else {
-    // Android など: 権限不要でそのまま有効
     enableGyro();
   }
 } else {
   hint.textContent = "🖱 ドラッグで視点を変えよう • スクロールでズーム";
-  setTimeout(()=>{ hint.style.opacity = "0"; }, 3500);
+  setTimeout(() => { hint.style.opacity = "0"; }, 3500);
 }
 
 // ── Render loop ──────────────────────────────────────────────
 const clock = new THREE.Clock();
 
 renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta();
+  clock.getDelta();
 
   if (gyroActive && splatMesh) {
-    // ジャイロ: カメラを極座標で回転（OrbitControlsを一時バイパス）
-    const radius = camera.position.length();
+    const radius   = camera.position.length();
     const curPhi   = Math.atan2(camera.position.y, Math.sqrt(camera.position.x**2 + camera.position.z**2));
     const curTheta = Math.atan2(camera.position.x, camera.position.z);
-
     const newPhi   = THREE.MathUtils.lerp(curPhi,   -targetRotX, 0.08);
     const newTheta = THREE.MathUtils.lerp(curTheta,  targetRotY, 0.08);
-
     camera.position.x = radius * Math.sin(newTheta) * Math.cos(newPhi);
     camera.position.y = radius * Math.sin(newPhi);
     camera.position.z = radius * Math.cos(newTheta) * Math.cos(newPhi);
@@ -278,9 +253,7 @@ renderer.setAnimationLoop(() => {
     orbit.update();
   }
 
-  // アクセントカラーでライトをほんのり変化させる
   pointLight.intensity = 1.0 + 0.3 * Math.sin(clock.elapsedTime * 0.8);
-
   renderer.render(scene, camera);
 });
 
@@ -292,10 +265,9 @@ window.addEventListener("resize", () => {
   renderer.setSize(w, h);
 });
 
-// ── Drag cursors ─────────────────────────────────────────────
 const overlay = document.getElementById("tap-overlay");
-overlay.addEventListener("pointerdown", ()=> overlay.classList.add("grabbing"));
-overlay.addEventListener("pointerup",   ()=> overlay.classList.remove("grabbing"));
+overlay.addEventListener("pointerdown", () => overlay.classList.add("grabbing"));
+overlay.addEventListener("pointerup",   () => overlay.classList.remove("grabbing"));
 </script>
 </body>
 </html>
