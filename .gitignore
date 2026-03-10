@@ -6,5 +6,6 @@ node_modules/
 
 # 3DGS files - 生のPLYは大きすぎるのでgit管理しない
 assets/splats/*.ply
+!assets/splats/*.compressed.ply
 assets/omamori/**/output*/
 assets/omamori/**/output_mac/

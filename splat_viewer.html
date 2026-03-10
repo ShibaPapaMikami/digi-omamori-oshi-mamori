@@ -9,7 +9,6 @@
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; }
     canvas { display:block; }
-
     #ui-header {
       position:fixed; top:0; left:0; right:0; z-index:100;
       display:flex; align-items:center; padding:44px 20px 14px;
@@ -40,7 +39,7 @@
       background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3);
       border-radius:28px; padding:12px 28px; color:white;
       font-family:'Noto Sans JP',sans-serif; font-size:13px; cursor:pointer;
-      backdrop-filter:blur(12px); display:none; transition:opacity .3s;
+      backdrop-filter:blur(12px); display:none;
     }
     #loading {
       position:fixed; inset:0; background:#0a0005;
@@ -60,9 +59,9 @@
       gap:14px; z-index:200; padding:40px;
     }
     #error-panel .ei { font-size:52px; }
-    #error-panel p  { color:rgba(255,255,255,.55); font-family:'Noto Sans JP',sans-serif;
+    #error-panel p { color:rgba(255,255,255,.55); font-family:'Noto Sans JP',sans-serif;
       font-size:13px; text-align:center; line-height:1.8; }
-    #error-panel a  { color:#F472B6; font-size:12px; text-decoration:none; }
+    #error-panel a { color:#F472B6; font-size:12px; text-decoration:none; }
     #tap-overlay { position:fixed; inset:0; z-index:50; cursor:grab; }
     #tap-overlay.grabbing { cursor:grabbing; }
   </style>
@@ -79,7 +78,7 @@
   <div class="ei">🔮</div>
   <p id="error-text">
     3Dデータを読み込めませんでした。<br/>
-    <code style="color:#F472B6">/assets/splats/{id}.spz</code><br/>
+    <code style="color:#F472B6">/assets/splats/{id}.compressed.ply</code><br/>
     が存在するか確認してください。
   </p>
   <a href="index.html">← 一覧に戻る</a>
@@ -111,7 +110,6 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 
-// ── URL params ───────────────────────────────────────────────
 const params     = new URLSearchParams(location.search);
 const talentId   = params.get("t") || "goto_rara";
 const talentName = decodeURIComponent(params.get("n") || "");
@@ -125,7 +123,6 @@ const accent = accentMap[talentId] || "#DB2777";
 document.documentElement.style.setProperty("--accent", accent);
 document.getElementById("talent-name").textContent = talentName ? `${talentName} — 3D` : "3D表示";
 
-// ── Three.js setup ───────────────────────────────────────────
 const W = window.innerWidth, H = window.innerHeight;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(W, H);
@@ -156,15 +153,14 @@ const pointLight = new THREE.PointLight(new THREE.Color(accent), 1.2, 12);
 pointLight.position.set(1, 2, 2);
 scene.add(pointLight);
 
-// ── Load .spz ────────────────────────────────────────────────
-const splatURL = `/assets/splats/${talentId}.spz`;
+// .compressed.ply を読み込む
+const splatURL = `/assets/splats/${talentId}.compressed.ply`;
 let splatMesh;
 
 try {
-  document.getElementById("loading-msg").textContent = ".spz 読み込み中...";
-
+  document.getElementById("loading-msg").textContent = "3Dデータを読み込み中...";
   splatMesh = new SplatMesh({ url: splatURL });
-  splatMesh.rotation.x = Math.PI; // ml-sharp: Y軸反転
+  splatMesh.rotation.x = Math.PI;
   splatMesh.position.set(0, 0, 0);
   scene.add(splatMesh);
 
@@ -188,7 +184,7 @@ try {
   document.getElementById("error-panel").style.display = "flex";
 }
 
-// ── Gyroscope ────────────────────────────────────────────────
+// Gyroscope
 const isTouch    = "ontouchstart" in window;
 const hint       = document.getElementById("hint");
 const gyroBtn    = document.getElementById("gyro-btn");
@@ -198,9 +194,7 @@ let   targetRotX = 0, targetRotY = 0;
 
 function onOrientation(e) {
   if (!e.beta && !e.gamma) return;
-  if (baseAlpha === null) {
-    baseAlpha = e.alpha; baseBeta = e.beta; baseGamma = e.gamma; return;
-  }
+  if (baseAlpha === null) { baseAlpha = e.alpha; baseBeta = e.beta; baseGamma = e.gamma; return; }
   targetRotX =  (e.beta  - baseBeta)  * (Math.PI / 180) * 0.7;
   targetRotY =  (e.gamma - baseGamma) * (Math.PI / 180) * 0.7;
 }
@@ -233,12 +227,9 @@ if (isTouch) {
   setTimeout(() => { hint.style.opacity = "0"; }, 3500);
 }
 
-// ── Render loop ──────────────────────────────────────────────
 const clock = new THREE.Clock();
-
 renderer.setAnimationLoop(() => {
   clock.getDelta();
-
   if (gyroActive && splatMesh) {
     const radius   = camera.position.length();
     const curPhi   = Math.atan2(camera.position.y, Math.sqrt(camera.position.x**2 + camera.position.z**2));
@@ -252,12 +243,10 @@ renderer.setAnimationLoop(() => {
   } else {
     orbit.update();
   }
-
   pointLight.intensity = 1.0 + 0.3 * Math.sin(clock.elapsedTime * 0.8);
   renderer.render(scene, camera);
 });
 
-// ── Resize ───────────────────────────────────────────────────
 window.addEventListener("resize", () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
