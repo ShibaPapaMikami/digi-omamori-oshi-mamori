@@ -434,7 +434,8 @@ function DetailScreen({ talent: init, onBack, onContent }) {
 
   // 3D viewer URL
   const open3D = () => {
-    const url = `/splat_viewer.html?t=${t.splatId}&n=${encodeURIComponent(t.name)}`;
+    const photo = t.photos[idx] || t.photos[0] || '';
+    const url = `/splat_viewer.html?t=${t.splatId}&n=${encodeURIComponent(t.name)}&p=${encodeURIComponent(photo)}`;
     window.open(url, '_blank');
   };
 

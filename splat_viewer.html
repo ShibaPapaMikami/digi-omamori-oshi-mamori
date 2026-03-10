@@ -9,10 +9,14 @@
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; }
     canvas { display:block; }
+    #photo-overlay {
+      position:fixed; inset:0; z-index:20;
+      pointer-events:none;
+    }
     #ui-header {
       position:fixed; top:0; left:0; right:0; z-index:100;
       display:flex; align-items:center; padding:44px 20px 14px;
-      background:linear-gradient(to bottom,rgba(0,0,0,.75) 60%,transparent);
+      background:linear-gradient(to bottom,rgba(0,0,0,.7) 60%,transparent);
       pointer-events:none;
     }
     #back-btn {
@@ -29,22 +33,22 @@
       text-shadow:0 2px 12px rgba(0,0,0,.6);
     }
     #hint {
-      position:fixed; bottom:44px; left:0; right:0;
-      text-align:center; color:rgba(255,255,255,.45);
+      position:fixed; bottom:44px; left:0; right:0; z-index:200;
+      text-align:center; color:rgba(255,255,255,.5);
       font-family:'Noto Sans JP',sans-serif; font-size:11px;
       pointer-events:none; transition:opacity 1.5s; letter-spacing:.5px;
     }
     #gyro-btn {
-      position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
-      background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.3);
+      position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:200;
+      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3);
       border-radius:28px; padding:12px 28px; color:white;
       font-family:'Noto Sans JP',sans-serif; font-size:13px; cursor:pointer;
       backdrop-filter:blur(12px); display:none;
     }
     #loading {
-      position:fixed; inset:0; background:#0a0005;
+      position:fixed; inset:0; background:#0a0005; z-index:300;
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;
-      z-index:200; transition:opacity .6s;
+      transition:opacity .6s;
     }
     .spinner {
       width:52px; height:52px;
@@ -54,13 +58,12 @@
     @keyframes spin { to{ transform:rotate(360deg); } }
     #loading-msg { color:rgba(255,255,255,.5); font-family:'Noto Sans JP',sans-serif; font-size:12px; }
     #error-panel {
-      position:fixed; inset:0; background:#0a0005;
+      position:fixed; inset:0; background:#0a0005; z-index:300;
       display:none; flex-direction:column; align-items:center; justify-content:center;
-      gap:14px; z-index:200; padding:40px;
+      gap:14px; padding:40px;
     }
     #error-panel .ei { font-size:52px; }
-    #error-panel p { color:rgba(255,255,255,.55); font-family:'Noto Sans JP',sans-serif;
-      font-size:13px; text-align:center; line-height:1.8; }
+    #error-panel p { color:rgba(255,255,255,.55); font-family:'Noto Sans JP',sans-serif; font-size:13px; text-align:center; line-height:1.8; }
     #error-panel a { color:#F472B6; font-size:12px; text-decoration:none; }
     #tap-overlay { position:fixed; inset:0; z-index:50; cursor:grab; }
     #tap-overlay.grabbing { cursor:grabbing; }
@@ -73,17 +76,13 @@
   <div class="spinner"></div>
   <p id="loading-msg">3Dデータを読み込み中...</p>
 </div>
-
 <div id="error-panel">
   <div class="ei">🔮</div>
-  <p id="error-text">
-    3Dデータを読み込めませんでした。<br/>
-    <code style="color:#F472B6">/assets/splats/{id}.compressed.ply</code><br/>
-    が存在するか確認してください。
-  </p>
+  <p>3Dデータを読み込めませんでした。</p>
   <a href="index.html">← 一覧に戻る</a>
 </div>
 
+<canvas id="photo-overlay"></canvas>
 <div id="tap-overlay"></div>
 
 <div id="ui-header">
@@ -91,8 +90,7 @@
   <div id="talent-name"></div>
   <div style="width:64px"></div>
 </div>
-
-<div id="hint">📱 スマホを傾けて視点を変えよう</div>
+<div id="hint"></div>
 <button id="gyro-btn">📱 ジャイロを有効にする</button>
 
 <script type="importmap">
@@ -110,148 +108,225 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 
+// ── URLパラメータ ──────────────────────────────────
 const params     = new URLSearchParams(location.search);
-const talentId   = params.get("t") || "goto_rara";
+const talentId   = params.get("t") || "abe_kayako";
 const talentName = decodeURIComponent(params.get("n") || "");
-const accentMap  = {
-  goto_rara:    "#DB2777", tasaki_sakura: "#E11D48",
-  abe_kayako:   "#D97706", ushio_sarina:  "#0284C7",
-  hayashi_yuka: "#7C3AED", mori_chiharu:  "#059669",
-  kaito_aiko:   "#C2410C"
+const photoUrl   = decodeURIComponent(params.get("p") || "");
+
+// 窓の位置（各タレントの写真に合わせて調整: x, y, w, h — 0〜1の比率）
+const WINDOW_RECT = {
+  goto_rara:    { x:0.33, y:0.30, w:0.32, h:0.33 },
+  tasaki_sakura:{ x:0.33, y:0.30, w:0.32, h:0.33 },
+  abe_kayako:   { x:0.33, y:0.32, w:0.30, h:0.32 },
+  ushio_sarina: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  hayashi_yuka: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  mori_chiharu: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  kaito_aiko:   { x:0.33, y:0.30, w:0.32, h:0.33 },
+};
+const winRect = WINDOW_RECT[talentId] || { x:0.33, y:0.30, w:0.32, h:0.33 };
+
+const accentMap = {
+  goto_rara:"#DB2777", tasaki_sakura:"#E11D48", abe_kayako:"#D97706",
+  ushio_sarina:"#0284C7", hayashi_yuka:"#7C3AED",
+  mori_chiharu:"#059669", kaito_aiko:"#C2410C"
 };
 const accent = accentMap[talentId] || "#DB2777";
 document.documentElement.style.setProperty("--accent", accent);
-document.getElementById("talent-name").textContent = talentName ? `${talentName} — 3D` : "3D表示";
+document.getElementById("talent-name").textContent = talentName ? `${talentName} — 3D` : "3D";
 
+// ── Three.js セットアップ ──────────────────────────
 const W = window.innerWidth, H = window.innerHeight;
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x0a0005);
-document.body.insertBefore(renderer.domElement, document.getElementById("tap-overlay"));
+const threeRenderer = new THREE.WebGLRenderer({ antialias:true });
+threeRenderer.setSize(W, H);
+threeRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+threeRenderer.setClearColor(0x06060a);
+document.body.insertBefore(threeRenderer.domElement, document.getElementById("photo-overlay"));
+threeRenderer.domElement.style.cssText = "position:fixed;inset:0;z-index:1;";
 
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, W/H, 0.01, 100);
 camera.position.set(0, 0, 3);
 
 const orbit = new OrbitControls(camera, document.getElementById("tap-overlay"));
-orbit.enableDamping   = true;
-orbit.dampingFactor   = 0.08;
-orbit.enableZoom      = true;
-orbit.minDistance     = 1;
-orbit.maxDistance     = 8;
-orbit.autoRotate      = true;
-orbit.autoRotateSpeed = 0.6;
+orbit.enableDamping = true; orbit.dampingFactor = 0.08;
+orbit.enableZoom = true; orbit.minDistance = 1; orbit.maxDistance = 8;
+orbit.autoRotate = true; orbit.autoRotateSpeed = 0.5;
 orbit.target.set(0, 0, 0);
 
-const spark = new SparkRenderer({ renderer });
+const spark = new SparkRenderer({ renderer: threeRenderer });
 scene.add(spark);
-
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambient);
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 const pointLight = new THREE.PointLight(new THREE.Color(accent), 1.2, 12);
 pointLight.position.set(1, 2, 2);
 scene.add(pointLight);
 
-// .compressed.ply を読み込む
+// ── 写真オーバーレイ（窓に穴を開ける） ──────────────
+const photoCanvas = document.getElementById("photo-overlay");
+photoCanvas.width  = W;
+photoCanvas.height = H;
+photoCanvas.style.cssText = "position:fixed;inset:0;z-index:20;pointer-events:none;";
+const pCtx = photoCanvas.getContext("2d");
+
+function drawPhotoOverlay(img) {
+  pCtx.clearRect(0, 0, W, H);
+  pCtx.drawImage(img, 0, 0, W, H);
+
+  // 窓の穴を開ける（destination-out = 消しゴム）
+  const rx = winRect.x * W, ry = winRect.y * H;
+  const rw = winRect.w * W, rh = winRect.h * H;
+  const r  = 8; // 角丸
+  pCtx.globalCompositeOperation = "destination-out";
+  pCtx.beginPath();
+  pCtx.moveTo(rx + r, ry);
+  pCtx.lineTo(rx + rw - r, ry);
+  pCtx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+r);
+  pCtx.lineTo(rx + rw, ry + rh - r);
+  pCtx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-r, ry+rh);
+  pCtx.lineTo(rx + r, ry + rh);
+  pCtx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-r);
+  pCtx.lineTo(rx, ry + r);
+  pCtx.quadraticCurveTo(rx, ry, rx+r, ry);
+  pCtx.closePath();
+  pCtx.fill();
+  pCtx.globalCompositeOperation = "source-over";
+
+  // 窓枠（ハイライト）
+  pCtx.strokeStyle = "rgba(255,255,255,0.3)";
+  pCtx.lineWidth   = 1.5;
+  pCtx.beginPath();
+  pCtx.moveTo(rx + r, ry);
+  pCtx.lineTo(rx + rw - r, ry);
+  pCtx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+r);
+  pCtx.lineTo(rx + rw, ry + rh - r);
+  pCtx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-r, ry+rh);
+  pCtx.lineTo(rx + r, ry + rh);
+  pCtx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-r);
+  pCtx.lineTo(rx, ry + r);
+  pCtx.quadraticCurveTo(rx, ry, rx+r, ry);
+  pCtx.closePath();
+  pCtx.stroke();
+}
+
+let photoImg = null;
+if (photoUrl) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload  = () => { photoImg = img; drawPhotoOverlay(img); };
+  img.onerror = () => console.warn("Photo load failed:", photoUrl);
+  img.src = photoUrl;
+}
+
+// ── Splat 読み込み ────────────────────────────────
 const splatURL = `/assets/splats/${talentId}.compressed.ply`;
-let splatMesh;
+let splatMesh  = null;
 
 try {
-  document.getElementById("loading-msg").textContent = "3Dデータを読み込み中...";
   splatMesh = new SplatMesh({ url: splatURL });
   splatMesh.rotation.x = Math.PI;
-  splatMesh.position.set(0, 0, 0);
   scene.add(splatMesh);
 
   await new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), 30000);
     const check = () => {
-      if (splatMesh.numSplats > 0) resolve();
-      else if (splatMesh._loadError) reject(splatMesh._loadError);
+      if (splatMesh.numSplats > 0) { clearTimeout(t); resolve(); }
       else setTimeout(check, 100);
     };
     check();
-    setTimeout(() => reject(new Error("timeout")), 30000);
   });
 
   const loadEl = document.getElementById("loading");
   loadEl.style.opacity = "0";
-  setTimeout(() => { loadEl.style.display = "none"; }, 650);
+  setTimeout(() => loadEl.style.display = "none", 600);
 
 } catch(e) {
-  console.error("Splat load error:", e);
   document.getElementById("loading").style.display     = "none";
   document.getElementById("error-panel").style.display = "flex";
 }
 
-// Gyroscope
-const isTouch    = "ontouchstart" in window;
-const hint       = document.getElementById("hint");
-const gyroBtn    = document.getElementById("gyro-btn");
-let   gyroActive = false;
-let   baseAlpha  = null, baseBeta = null, baseGamma = null;
-let   targetRotX = 0, targetRotY = 0;
+// ── ジャイロ（パノラマ視差モード） ────────────────
+const isTouch  = "ontouchstart" in window;
+const hint     = document.getElementById("hint");
+const gyroBtn  = document.getElementById("gyro-btn");
+let gyroActive = false;
+let calibrated = false;
+let baseBeta   = 0, baseGamma = 0;
+let targetPanX = 0, targetPanY = 0;
+const PAN_SCALE = 0.012; // 傾き感度
+const PAN_LIMIT = 1.2;   // 最大移動量
 
 function onOrientation(e) {
-  if (!e.beta && !e.gamma) return;
-  if (baseAlpha === null) { baseAlpha = e.alpha; baseBeta = e.beta; baseGamma = e.gamma; return; }
-  targetRotX =  (e.beta  - baseBeta)  * (Math.PI / 180) * 0.7;
-  targetRotY =  (e.gamma - baseGamma) * (Math.PI / 180) * 0.7;
+  const beta  = e.beta  ?? 0;
+  const gamma = e.gamma ?? 0;
+  if (!calibrated) {
+    baseBeta  = beta;
+    baseGamma = gamma;
+    calibrated = true;
+    return;
+  }
+  targetPanX = THREE.MathUtils.clamp((gamma - baseGamma) * PAN_SCALE, -PAN_LIMIT, PAN_LIMIT);
+  targetPanY = THREE.MathUtils.clamp((beta  - baseBeta)  * PAN_SCALE * -1, -PAN_LIMIT * 0.6, PAN_LIMIT * 0.6);
 }
 
 async function enableGyro() {
-  if (typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function") {
+  if (typeof DeviceOrientationEvent?.requestPermission === "function") {
     const perm = await DeviceOrientationEvent.requestPermission().catch(() => "denied");
-    if (perm !== "granted") return;
+    if (perm !== "granted") {
+      alert("ジャイロの許可が必要です。設定から許可してください。");
+      return;
+    }
   }
   window.addEventListener("deviceorientation", onOrientation, true);
   gyroActive = true;
+  orbit.enabled = false;        // ← OrbitControlsを無効化
   orbit.autoRotate = false;
   gyroBtn.style.display = "none";
-  hint.textContent = "📱 スマホを傾けて視点を変えよう";
-  setTimeout(() => { hint.style.opacity = "0"; }, 3500);
+  hint.textContent = "📱 スマホを傾けると視点が変わります";
+  setTimeout(() => { hint.style.opacity = "0"; }, 4000);
 }
 
 if (isTouch) {
-  if (typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function") {
+  if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+    // iOS: ボタンタップが必要
     gyroBtn.style.display = "block";
     gyroBtn.addEventListener("click", enableGyro);
     hint.textContent = "下のボタンでジャイロを有効にできます";
   } else {
+    // Android: 自動有効
     enableGyro();
+    hint.textContent = "📱 スマホを傾けると視点が変わります";
+    setTimeout(() => { hint.style.opacity = "0"; }, 4000);
   }
 } else {
-  hint.textContent = "🖱 ドラッグで視点を変えよう • スクロールでズーム";
-  setTimeout(() => { hint.style.opacity = "0"; }, 3500);
+  hint.textContent = "🖱 ドラッグで視点を変えよう";
+  setTimeout(() => { hint.style.opacity = "0"; }, 3000);
 }
 
+// ── レンダーループ ────────────────────────────────
 const clock = new THREE.Clock();
-renderer.setAnimationLoop(() => {
+threeRenderer.setAnimationLoop(() => {
   clock.getDelta();
-  if (gyroActive && splatMesh) {
-    const radius   = camera.position.length();
-    const curPhi   = Math.atan2(camera.position.y, Math.sqrt(camera.position.x**2 + camera.position.z**2));
-    const curTheta = Math.atan2(camera.position.x, camera.position.z);
-    const newPhi   = THREE.MathUtils.lerp(curPhi,   -targetRotX, 0.08);
-    const newTheta = THREE.MathUtils.lerp(curTheta,  targetRotY, 0.08);
-    camera.position.x = radius * Math.sin(newTheta) * Math.cos(newPhi);
-    camera.position.y = radius * Math.sin(newPhi);
-    camera.position.z = radius * Math.cos(newTheta) * Math.cos(newPhi);
-    camera.lookAt(0, 0, 0);
+  if (gyroActive) {
+    // カメラをパン（視差）
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetPanX, 0.07);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetPanY + 0.3, 0.07);
+    camera.position.z = 3;
+    camera.lookAt(0, 0.3, 0);
   } else {
     orbit.update();
   }
-  pointLight.intensity = 1.0 + 0.3 * Math.sin(clock.elapsedTime * 0.8);
-  renderer.render(scene, camera);
+  pointLight.intensity = 1.0 + 0.25 * Math.sin(clock.elapsedTime * 0.9);
+  threeRenderer.render(scene, camera);
 });
 
+// ── リサイズ ──────────────────────────────────────
 window.addEventListener("resize", () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
+  threeRenderer.setSize(w, h);
+  photoCanvas.width = w; photoCanvas.height = h;
+  if (photoImg) drawPhotoOverlay(photoImg);
 });
 
 const overlay = document.getElementById("tap-overlay");

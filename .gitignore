@@ -5,6 +5,7 @@ node_modules/
 .vercel
 
 # 3DGS files - 生のPLYは大きすぎるのでgit管理しない
+assets/splats/**/*.ply
 assets/splats/*.ply
 !assets/splats/*.compressed.ply
 assets/omamori/**/output*/
