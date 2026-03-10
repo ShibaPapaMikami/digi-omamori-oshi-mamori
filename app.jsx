@@ -17,9 +17,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #FDF2F8 0%, #FCE7F3 40%, #FBCFE8 100%)",
     emoji: "🌸",
     photos: [
-      "./assets/omamori/後藤楽々/_93A1220.jpg",
-      "./assets/omamori/後藤楽々/_93A1471.jpg",
-      "./assets/omamori/後藤楽々/_93A1857.jpg",
+      "./assets/omamori/goto_rara/_93A1220.jpg",
+      "./assets/omamori/goto_rara/_93A1471.jpg",
+      "./assets/omamori/goto_rara/_93A1857.jpg",
     ],
     oshi_msg: "今日も一日、お疲れ様🌸\nいつも応援ありがとう！",
     luckPoints: 280,
@@ -32,7 +32,7 @@ const OMAMORI_LIST = [
     acquired: "2026-01-15",
     contents: [
       { id: 1, type: "voice", title: "今日もお疲れ様ボイス", locked: false, date: "2月14日", desc: "バレンタイン当日の特別ボイス💌" },
-      { id: 2, type: "image", title: "特別ショット", locked: false, date: "2月14日", imgSrc: "./assets/omamori/後藤楽々/_93A1471.jpg" },
+      { id: 2, type: "image", title: "特別ショット", locked: false, date: "2月14日", imgSrc: "./assets/omamori/goto_rara/_93A1471.jpg" },
       { id: 3, type: "voice", title: "おやすみボイス", locked: true, date: "---", desc: "" },
     ],
     titles: [
@@ -52,9 +52,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #FFF1F2 0%, #FFE4E6 40%, #FECDD3 100%)",
     emoji: "🌺",
     photos: [
-      "./assets/omamori/田﨑さくら/_93A0115.jpg",
-      "./assets/omamori/田﨑さくら/_93A0171.jpg",
-      "./assets/omamori/田﨑さくら/_93A0817.jpg",
+      "./assets/omamori/tasaki_sakura/_93A0115.jpg",
+      "./assets/omamori/tasaki_sakura/_93A0171.jpg",
+      "./assets/omamori/tasaki_sakura/_93A0817.jpg",
     ],
     oshi_msg: "桜のように美しく、強く🌺\n一緒に頑張ろうね！",
     luckPoints: 400,
@@ -67,7 +67,7 @@ const OMAMORI_LIST = [
     acquired: "2025-12-01",
     contents: [
       { id: 1, type: "voice", title: "春のご挨拶ボイス", locked: false, date: "3月1日", desc: "春一番のメッセージ🌸" },
-      { id: 2, type: "image", title: "桜咲くショット", locked: false, date: "3月1日", imgSrc: "./assets/omamori/田﨑さくら/_93A0171.jpg" },
+      { id: 2, type: "image", title: "桜咲くショット", locked: false, date: "3月1日", imgSrc: "./assets/omamori/tasaki_sakura/_93A0171.jpg" },
       { id: 3, type: "voice", title: "誕生日メッセージ", locked: false, date: "4月1日", desc: "お誕生日おめでとう🎂" },
     ],
     titles: [
@@ -87,9 +87,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #FFFBEB 0%, #FEF3C7 40%, #FDE68A 100%)",
     emoji: "🌻",
     photos: [
-      "./assets/omamori/阿部華也子/_93A1111.jpg",
-      "./assets/omamori/阿部華也子/_93A1160.jpg",
-      "./assets/omamori/阿部華也子/_93A1849.jpg",
+      "./assets/omamori/abe_kayako/_93A1111.jpg",
+      "./assets/omamori/abe_kayako/_93A1160.jpg",
+      "./assets/omamori/abe_kayako/_93A1849.jpg",
     ],
     oshi_msg: "太陽みたいに明るく照らすよ🌻\nありがとう！",
     luckPoints: 120,
@@ -102,7 +102,7 @@ const OMAMORI_LIST = [
     acquired: "2026-02-01",
     contents: [
       { id: 1, type: "voice", title: "元気いっぱいボイス", locked: true, date: "---", desc: "" },
-      { id: 2, type: "image", title: "サンシャインショット", locked: true, date: "---", imgSrc: "./assets/omamori/阿部華也子/_93A1160.jpg" },
+      { id: 2, type: "image", title: "サンシャインショット", locked: true, date: "---", imgSrc: "./assets/omamori/abe_kayako/_93A1160.jpg" },
     ],
     titles: [
       { name: "かやこさんの新米ファン", threshold: 0, unlocked: true },
@@ -121,9 +121,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #F0F9FF 0%, #E0F2FE 40%, #BAE6FD 100%)",
     emoji: "🌊",
     photos: [
-      "./assets/omamori/潮紗理菜/_93A0259.jpg",
-      "./assets/omamori/潮紗理菜/_93A0451.jpg",
-      "./assets/omamori/潮紗理菜/_93A0659.jpg",
+      "./assets/omamori/ushio_sarina/_93A0259.jpg",
+      "./assets/omamori/ushio_sarina/_93A0451.jpg",
+      "./assets/omamori/ushio_sarina/_93A0659.jpg",
     ],
     oshi_msg: "波のように力強く前へ🌊\n一緒に進もう！",
     luckPoints: 60,
@@ -136,7 +136,7 @@ const OMAMORI_LIST = [
     acquired: "2026-02-20",
     contents: [
       { id: 1, type: "voice", title: "海風ボイス", locked: true, date: "---", desc: "" },
-      { id: 2, type: "image", title: "サマーショット", locked: true, date: "---", imgSrc: "./assets/omamori/潮紗理菜/_93A0451.jpg" },
+      { id: 2, type: "image", title: "サマーショット", locked: true, date: "---", imgSrc: "./assets/omamori/ushio_sarina/_93A0451.jpg" },
     ],
     titles: [
       { name: "さりなさんの新米ファン", threshold: 0, unlocked: true },
@@ -155,9 +155,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #F5F3FF 0%, #EDE9FE 40%, #DDD6FE 100%)",
     emoji: "🔮",
     photos: [
-      "./assets/omamori/林佑香/_93A0098.jpg",
-      "./assets/omamori/林佑香/_93A0204.jpg",
-      "./assets/omamori/林佑香/_93A0513.jpg",
+      "./assets/omamori/hayashi_yuka/_93A0098.jpg",
+      "./assets/omamori/hayashi_yuka/_93A0204.jpg",
+      "./assets/omamori/hayashi_yuka/_93A0513.jpg",
     ],
     oshi_msg: "不思議な魅力で輝き続けるよ🔮\nいつも感謝！",
     luckPoints: 200,
@@ -170,7 +170,7 @@ const OMAMORI_LIST = [
     acquired: "2026-01-20",
     contents: [
       { id: 1, type: "voice", title: "神秘のボイス", locked: false, date: "2月1日", desc: "幻想的なメッセージ✨" },
-      { id: 2, type: "image", title: "ミスティックショット", locked: true, date: "---", imgSrc: "./assets/omamori/林佑香/_93A0204.jpg" },
+      { id: 2, type: "image", title: "ミスティックショット", locked: true, date: "---", imgSrc: "./assets/omamori/hayashi_yuka/_93A0204.jpg" },
     ],
     titles: [
       { name: "ゆかさんの新米ファン", threshold: 0, unlocked: true },
@@ -189,9 +189,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #ECFDF5 0%, #D1FAE5 40%, #A7F3D0 100%)",
     emoji: "🍀",
     photos: [
-      "./assets/omamori/森千晴/_S3_1569.jpg",
-      "./assets/omamori/森千晴/_S3_1769.jpg",
-      "./assets/omamori/森千晴/_S3_1978.jpg",
+      "./assets/omamori/mori_chiharu/_S3_1569.jpg",
+      "./assets/omamori/mori_chiharu/_S3_1769.jpg",
+      "./assets/omamori/mori_chiharu/_S3_1978.jpg",
     ],
     oshi_msg: "自然体のあなたが大好き🍀\n今日もありがとう！",
     luckPoints: 340,
@@ -204,7 +204,7 @@ const OMAMORI_LIST = [
     acquired: "2026-01-10",
     contents: [
       { id: 1, type: "voice", title: "森の囁きボイス", locked: false, date: "1月20日", desc: "ナチュラルなメッセージ🌿" },
-      { id: 2, type: "image", title: "グリーンショット", locked: false, date: "1月20日", imgSrc: "./assets/omamori/森千晴/_S3_1769.jpg" },
+      { id: 2, type: "image", title: "グリーンショット", locked: false, date: "1月20日", imgSrc: "./assets/omamori/mori_chiharu/_S3_1769.jpg" },
       { id: 3, type: "voice", title: "おやすみボイス", locked: true, date: "---", desc: "" },
     ],
     titles: [
@@ -224,9 +224,9 @@ const OMAMORI_LIST = [
     gradCss: "linear-gradient(160deg, #FFF7ED 0%, #FFEDD5 40%, #FED7AA 100%)",
     emoji: "🍊",
     photos: [
-      "./assets/omamori/皆藤愛子/_93A3111.jpg",
-      "./assets/omamori/皆藤愛子/_S3_2429.jpg",
-      "./assets/omamori/皆藤愛子/_S3_5100.jpg",
+      "./assets/omamori/kaito_aiko/_93A3111.jpg",
+      "./assets/omamori/kaito_aiko/_S3_2429.jpg",
+      "./assets/omamori/kaito_aiko/_S3_5100.jpg",
     ],
     oshi_msg: "元気を届けるのが私の使命🍊\nいつもありがとう！",
     luckPoints: 80,
@@ -239,7 +239,7 @@ const OMAMORI_LIST = [
     acquired: "2026-03-01",
     contents: [
       { id: 1, type: "voice", title: "元気爆発ボイス", locked: true, date: "---", desc: "" },
-      { id: 2, type: "image", title: "オレンジショット", locked: true, date: "---", imgSrc: "./assets/omamori/皆藤愛子/_S3_2429.jpg" },
+      { id: 2, type: "image", title: "オレンジショット", locked: true, date: "---", imgSrc: "./assets/omamori/kaito_aiko/_S3_2429.jpg" },
     ],
     titles: [
       { name: "愛子さんの新米ファン", threshold: 0, unlocked: true },
