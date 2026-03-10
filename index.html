@@ -13,32 +13,9 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: #1a0a0f; }
     #root { height: 100%; }
-    :root {
-      --pink: #F472B6;
-      --pink-dark: #DB2777;
-      --pink-light: #FCE7F3;
-      --gold: #F59E0B;
-      --gold-light: #FEF3C7;
-      --cream: #FFF8F5;
-    }
     @keyframes floatUp {
       0% { opacity: 1; transform: translateY(0) scale(1); }
       100% { opacity: 0; transform: translateY(-80px) scale(0.5); }
-    }
-    @keyframes pulse-ring {
-      0% { transform: scale(0.8); opacity: 0.8; }
-      100% { transform: scale(2); opacity: 0; }
-    }
-    @keyframes meter-fill {
-      from { height: 0%; }
-    }
-    @keyframes shimmer {
-      0% { background-position: -200% center; }
-      100% { background-position: 200% center; }
-    }
-    @keyframes spin-slow {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
     }
     @keyframes bounce-in {
       0% { transform: scale(0.3); opacity: 0; }
@@ -51,10 +28,6 @@
       25% { transform: scaleY(1.1) skewX(-3deg); opacity: 0.9; }
       50% { transform: scaleY(0.95) skewX(3deg); opacity: 1; }
       75% { transform: scaleY(1.05) skewX(-2deg); opacity: 0.95; }
-    }
-    @keyframes smoke-rise {
-      0% { transform: translateY(0) scaleX(1); opacity: 0.6; }
-      100% { transform: translateY(-60px) scaleX(2); opacity: 0; }
     }
     @keyframes fade-in {
       from { opacity: 0; transform: translateY(12px); }
@@ -69,41 +42,86 @@
       100% { transform: scale(4); opacity: 0; }
     }
     @keyframes full-power-glow {
-      0%, 100% { box-shadow: 0 0 20px rgba(244, 114, 182, 0.4), 0 0 40px rgba(244, 114, 182, 0.2); }
-      50% { box-shadow: 0 0 40px rgba(244, 114, 182, 0.8), 0 0 80px rgba(244, 114, 182, 0.4); }
+      0%, 100% { box-shadow: 0 0 20px rgba(244,114,182,0.4), 0 0 40px rgba(244,114,182,0.2); }
+      50% { box-shadow: 0 0 40px rgba(244,114,182,0.8), 0 0 80px rgba(244,114,182,0.4); }
     }
-    .particle {
-      position: absolute;
-      pointer-events: none;
-      animation: floatUp 1s ease-out forwards;
-      font-size: 20px;
-      z-index: 100;
-    }
-    .tap-ripple-el {
-      position: absolute;
-      border-radius: 50%;
-      pointer-events: none;
-      animation: tap-ripple 0.6s ease-out forwards;
-    }
-    .full-power-animate {
-      animation: full-power-glow 1.5s ease-in-out infinite;
-    }
-    .flame-el {
-      animation: flame 0.3s ease-in-out infinite;
-      transform-origin: bottom center;
-    }
-    .smoke-el {
-      animation: smoke-rise 1.5s ease-out forwards;
-    }
-    scrollbar-width: thin;
-    scrollbar-color: rgba(244,114,182,0.3) transparent;
+    .particle { position: absolute; pointer-events: none; animation: floatUp 1s ease-out forwards; font-size: 20px; z-index: 100; }
+    .tap-ripple-el { position: absolute; border-radius: 50%; pointer-events: none; animation: tap-ripple 0.6s ease-out forwards; }
+    .full-power-animate { animation: full-power-glow 1.5s ease-in-out infinite; }
+    .flame-el { animation: flame 0.3s ease-in-out infinite; transform-origin: bottom center; }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(244,114,182,0.3); border-radius: 2px; }
+
+    /* password gate */
+    #gate {
+      position: fixed; inset: 0; background: #1a0a0f; z-index: 9999;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    }
+    #gate input {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(244,114,182,.3);
+      border-radius: 14px; padding: 14px 20px; font-size: 22px; color: white;
+      text-align: center; outline: none; width: 220px; letter-spacing: 8px; font-family: monospace;
+    }
+    #gate input:focus { border-color: rgba(244,114,182,.7); }
+    #gate button {
+      background: linear-gradient(90deg,#DB2777,#9333EA); border: none; border-radius: 14px;
+      padding: 13px 40px; font-size: 14px; font-family: 'Noto Sans JP',sans-serif;
+      font-weight: 700; color: white; cursor: pointer; transition: opacity .2s;
+    }
+    #gate button:hover { opacity: .85; }
+    #pw-err { color: #F87171; font-size: 12px; font-family: 'Noto Sans JP',sans-serif; display: none; margin-top: -8px; }
   </style>
 </head>
 <body>
+
+  <!-- password gate -->
+  <div id="gate">
+    <div style="font-size:40px">⛩</div>
+    <div style="font-family:'Zen Maru Gothic',sans-serif;font-size:18px;font-weight:700;
+      background:linear-gradient(90deg,#DB2777,#9333EA);-webkit-background-clip:text;
+      -webkit-text-fill-color:transparent;text-align:center;line-height:1.5;">
+      推し守り<br/>
+      <span style="font-size:12px;-webkit-text-fill-color:rgba(255,255,255,.4);background:none;">関係者限定プレビュー</span>
+    </div>
+    <input id="pw" type="password" placeholder="●●●●" maxlength="8"
+      onkeydown="if(event.key==='Enter')checkPw()" />
+    <button onclick="checkPw()">入場する →</button>
+    <div id="pw-err">パスワードが違います</div>
+  </div>
+
   <div id="root"></div>
+
+  <script>
+    (function(){
+      // hash: avoid plain-text password in source
+      function h(s){ var n=0; for(var i=0;i<s.length;i++) n=(n*31+s.charCodeAt(i))%999983; return n; }
+      var HASH = h('8417'); // 8417 hashed
+
+      function unlock(){
+        document.getElementById('gate').style.display='none';
+      }
+      function lock(){
+        document.getElementById('gate').style.display='flex';
+      }
+
+      if(sessionStorage.getItem('oshi_ok')==='1'){ unlock(); } else { lock(); }
+
+      window.checkPw = function(){
+        var v = document.getElementById('pw').value.trim();
+        if(h(v) === HASH){
+          sessionStorage.setItem('oshi_ok','1');
+          unlock();
+        } else {
+          document.getElementById('pw-err').style.display='block';
+          document.getElementById('pw').value='';
+          document.getElementById('pw').focus();
+          setTimeout(function(){ document.getElementById('pw-err').style.display='none'; }, 2000);
+        }
+      };
+    })();
+  </script>
+
   <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>
