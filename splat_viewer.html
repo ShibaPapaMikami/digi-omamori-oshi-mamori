@@ -61,24 +61,29 @@
     #error-panel a { color:#F472B6; font-size:12px; text-decoration:none; }
     #tap-overlay { position:fixed; inset:0; z-index:50; cursor:grab; }
     #tap-overlay.grabbing { cursor:grabbing; }
-    body.debug-on #tap-overlay { right:220px; }
+    body.debug-on #tap-overlay { right:230px; }
     #omamori-canvas { position:fixed; inset:0; z-index:20; pointer-events:none; }
+
+    /* デバッグパネル */
     #debug-panel {
       display:none;
       position:fixed; right:0; top:0; bottom:0; z-index:500;
-      width:220px; background:rgba(0,0,0,.88); backdrop-filter:blur(12px);
-      border-left:1px solid #333; padding:60px 16px 20px;
+      width:230px; background:rgba(0,0,0,.90); backdrop-filter:blur(12px);
+      border-left:1px solid #333; padding:56px 16px 20px;
       overflow-y:auto; font-family:monospace; font-size:12px; color:#ddd;
       flex-direction:column; gap:12px;
     }
     body.debug-on #debug-panel { display:flex; }
+    .dp-title { font-size:11px; color:#F472B6; font-weight:700; }
     .dp-row { display:flex; flex-direction:column; gap:3px; }
     .dp-row label { color:#9CA3AF; font-size:10px; display:flex; justify-content:space-between; }
     .dp-row label span { color:#34D399; font-weight:700; }
     .dp-row input[type=range] { width:100%; accent-color:#DB2777; margin:2px 0; }
     .dp-sep { border-top:1px solid #333; margin:4px 0; font-size:10px; color:#F472B6; font-weight:700; padding-top:8px; }
+    .dp-info { font-size:10px; color:#6B7280; line-height:1.6; }
+    .dp-computed { font-size:10px; color:#38BDF8; background:#0c1a2e; border-radius:6px; padding:6px 8px; line-height:1.7; }
     #debug-copy { padding:8px; border-radius:8px; border:none; background:#DB2777; color:white; font-size:11px; cursor:pointer; font-weight:700; }
-    #debug-output { background:#0a0a0a; border:1px solid #333; border-radius:6px; padding:8px; font-size:10px; color:#34D399; white-space:pre; line-height:1.6; overflow-x:auto; }
+    #debug-output { background:#0a0a0a; border:1px solid #333; border-radius:6px; padding:8px; font-size:10px; color:#34D399; white-space:pre; line-height:1.6; }
   </style>
 </head>
 <body>
@@ -105,19 +110,25 @@
 <button id="gyro-btn">📱 ジャイロを有効にする</button>
 
 <div id="debug-panel">
-  <div style="font-size:11px;color:#F472B6;font-weight:700">🔧 カメラ調整</div>
+  <div class="dp-title">🔧 調整パネル</div>
+
+  <div class="dp-info">camX/Y は窓の位置から<br>自動計算（端末非依存）</div>
+
   <div class="dp-row">
-    <label>camX 左右 <span id="dbv-cx">0.00</span></label>
-    <input type="range" id="db-cx" min="-3" max="3" step="0.05" value="0"/>
+    <label>camZ ズーム距離 <span id="dbv-cz">0.30</span></label>
+    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="0.30"/>
+  </div>
+
+  <div class="dp-sep">📐 微調整オフセット</div>
+  <div class="dp-row">
+    <label>offsetX 左右 <span id="dbv-ox">0.00</span></label>
+    <input type="range" id="db-ox" min="-2" max="2" step="0.02" value="0"/>
   </div>
   <div class="dp-row">
-    <label>camY 上下 <span id="dbv-cy">0.00</span></label>
-    <input type="range" id="db-cy" min="-3" max="3" step="0.05" value="0"/>
+    <label>offsetY 上下 <span id="dbv-oy">0.00</span></label>
+    <input type="range" id="db-oy" min="-2" max="2" step="0.02" value="0"/>
   </div>
-  <div class="dp-row">
-    <label>camZ ズーム <span id="dbv-cz">3.00</span></label>
-    <input type="range" id="db-cz" min="0.3" max="10" step="0.05" value="3"/>
-  </div>
+
   <div class="dp-sep">🪟 窓サイズ</div>
   <div class="dp-row">
     <label>winW 幅 <span id="dbv-ww">0.62</span></label>
@@ -131,6 +142,9 @@
     <label>winY 上端位置 <span id="dbv-wy">0.30</span></label>
     <input type="range" id="db-wy" min="0.05" max="0.85" step="0.01" value="0.30"/>
   </div>
+
+  <div class="dp-computed" id="dp-computed-xy">camX: 0.00<br>camY: 0.00</div>
+
   <div id="debug-output"></div>
   <button id="debug-copy">📋 値をコピー</button>
 </div>
@@ -165,6 +179,54 @@ document.documentElement.style.setProperty("--accent", accent);
 document.getElementById("talent-name").textContent = talentName || "推し守り";
 if (debugMode) document.body.classList.add("debug-on");
 
+// ── ★調整する定数（CAM.x/y は自動計算）★ ───────────────
+const CAM = { z: 0.30 };          // ズームだけ手動
+const OFFSET = { x: 0.00, y: 0.00 }; // 微調整用オフセット
+const WIN = { w: 0.62, h: 0.48, y: 0.30 };
+// ────────────────────────────────────────────────────────
+
+const FOV = 60; // PerspectiveCamera の fov と同じ値
+
+/**
+ * 窓の中心スクリーン座標 → 逆投影 → camX/Y を自動計算
+ * これにより「窓の中心にワールド原点が来るカメラ位置」が決まる
+ */
+function computeCamXY(camZ, offsetX, offsetY) {
+  const W = window.innerWidth, H = window.innerHeight;
+  const aspect = W / H;
+
+  // お守りの描画パラメータ（drawOmamori と完全一致）
+  const bodyH = H * 0.75;
+  const bodyW = bodyH * 0.58;
+  const bx = (W - bodyW) / 2;
+  const by = (H - bodyH) / 2 + H * 0.04;
+
+  // 窓の中心座標（スクリーンpx）
+  const winW_px = bodyW * WIN.w;
+  const winH_px = bodyH * WIN.h;
+  const winX_px = bx + (bodyW - winW_px) / 2;
+  const winY_px = by + bodyH * WIN.y;
+  const winCX   = winX_px + winW_px / 2; // 常に W/2（水平中央）
+  const winCY   = winY_px + winH_px / 2;
+
+  // NDC に変換（-1 〜 1）
+  const ndcX = (winCX / W) * 2 - 1;        // ≒ 0（水平中央）
+  const ndcY = 1 - (winCY / H) * 2;
+
+  // 逆投影: カメラが (cx, cy, camZ) から (cx, cy, 0) を見るとき
+  //   ワールド原点が ndcX/Y に投影されるには:
+  //   ndcX = (0 - cx) / camZ * f / aspect  →  cx = -ndcX * camZ * aspect / f
+  //   ndcY = (0 - cy) / camZ * f           →  cy = -ndcY * camZ / f
+  //   ただし「カメラが (cx,cy,camZ) を見る先 = (cx,cy,0)」なので
+  //   ビュー空間でのワールド原点は (-cx, -cy, -camZ) になる
+  //   → 符号を合わせると:
+  const f  = 1 / Math.tan((FOV / 2) * Math.PI / 180);
+  const cx = -ndcX * camZ * aspect / f + offsetX;
+  const cy = -ndcY * camZ / f + offsetY;
+
+  return { x: cx, y: cy };
+}
+
 // ── Three.js ──────────────────────────────────────────────
 const W = window.innerWidth, H = window.innerHeight;
 const threeRenderer = new THREE.WebGLRenderer({ antialias:true });
@@ -175,21 +237,17 @@ threeRenderer.domElement.style.cssText = "position:fixed;inset:0;z-index:1;";
 document.body.insertBefore(threeRenderer.domElement, document.getElementById("omamori-canvas"));
 
 const scene  = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, W/H, 0.01, 100);
+const camera = new THREE.PerspectiveCamera(FOV, W/H, 0.01, 100);
 
-// ── ★調整済み定数★ ───────────────────────────────────────
-const CAM = { x: 0.00, y: 0.40, z: 0.30 };
-const WIN = { w: 0.62, h: 0.48, y: 0.30 };
-// ────────────────────────────────────────────────────────
-
-camera.position.set(CAM.x, CAM.y, CAM.z);
-camera.lookAt(CAM.x, CAM.y, 0);
+const initCam = computeCamXY(CAM.z, OFFSET.x, OFFSET.y);
+camera.position.set(initCam.x, initCam.y, CAM.z);
+camera.lookAt(initCam.x, initCam.y, 0);
 
 const orbit = new OrbitControls(camera, document.getElementById("tap-overlay"));
 orbit.enableDamping = true; orbit.dampingFactor = 0.08;
-orbit.enableZoom = true; orbit.minDistance = 0.1; orbit.maxDistance = 12;
+orbit.enableZoom = true; orbit.minDistance = 0.05; orbit.maxDistance = 12;
 orbit.autoRotate = false;
-orbit.target.set(CAM.x, CAM.y, 0);
+orbit.target.set(initCam.x, initCam.y, 0);
 
 const spark = new SparkRenderer({ renderer: threeRenderer });
 scene.add(spark);
@@ -230,8 +288,7 @@ function drawOmamori(winW_r, winH_r, winY_r) {
   oCtx.clearRect(0,0,cw,ch);
   const bodyH=ch*0.75, bodyW=bodyH*0.58;
   const bx=(cw-bodyW)/2, by=(ch-bodyH)/2+ch*0.04, br=18;
-  oCtx.fillStyle="rgba(6,6,10,0.92)";
-  oCtx.fillRect(0,0,cw,ch);
+  oCtx.fillStyle="rgba(6,6,10,0.92)"; oCtx.fillRect(0,0,cw,ch);
   oCtx.globalCompositeOperation="destination-out";
   rr(oCtx,bx,by,bodyW,bodyH,br); oCtx.fillStyle="rgba(255,255,255,1)"; oCtx.fill();
   oCtx.globalCompositeOperation="source-over";
@@ -242,16 +299,14 @@ function drawOmamori(winW_r, winH_r, winY_r) {
   oCtx.globalCompositeOperation="source-over";
   oCtx.strokeStyle=colors.rim; oCtx.lineWidth=3;
   oCtx.shadowColor=colors.rim; oCtx.shadowBlur=12;
-  rr(oCtx,bx+1.5,by+1.5,bodyW-3,bodyH-3,br-1); oCtx.stroke();
-  oCtx.shadowBlur=0;
+  rr(oCtx,bx+1.5,by+1.5,bodyW-3,bodyH-3,br-1); oCtx.stroke(); oCtx.shadowBlur=0;
   oCtx.strokeStyle=colors.rim+"55"; oCtx.lineWidth=1;
   rr(oCtx,bx+8,by+8,bodyW-16,bodyH-16,br-4); oCtx.stroke();
   const winW=bodyW*winW_r, winH=bodyH*winH_r;
   const winX=bx+(bodyW-winW)/2, winY=by+bodyH*winY_r, winR=10;
   oCtx.shadowColor=colors.rim; oCtx.shadowBlur=20;
   oCtx.strokeStyle=colors.rim; oCtx.lineWidth=2;
-  rr(oCtx,winX,winY,winW,winH,winR); oCtx.stroke();
-  oCtx.shadowBlur=0;
+  rr(oCtx,winX,winY,winW,winH,winR); oCtx.stroke(); oCtx.shadowBlur=0;
   oCtx.globalCompositeOperation="destination-out";
   rr(oCtx,winX,winY,winW,winH,winR); oCtx.fillStyle="rgba(255,255,255,1)"; oCtx.fill();
   oCtx.globalCompositeOperation="source-over";
@@ -284,7 +339,7 @@ function resizeOmamori() {
 }
 resizeOmamori();
 
-// ── ジャイロ変数（デバッグパネルより前に宣言）────────────
+// ── ジャイロ変数（先に宣言）──────────────────────────────
 let gyroActive = false;
 
 // ── Splat 読み込み ────────────────────────────────────────
@@ -307,29 +362,55 @@ try {
 
 // ── デバッグパネル ────────────────────────────────────────
 if (debugMode) {
-  const ids = ["cx","cy","cz","ww","wh","wy"];
-  const sl  = Object.fromEntries(ids.map(k => [k, document.getElementById("db-"+k)]));
-  const vl  = Object.fromEntries(ids.map(k => [k, document.getElementById("dbv-"+k)]));
-  sl.cx.value=CAM.x; sl.cy.value=CAM.y; sl.cz.value=CAM.z;
+  const sl = {
+    cz: document.getElementById("db-cz"),
+    ox: document.getElementById("db-ox"),
+    oy: document.getElementById("db-oy"),
+    ww: document.getElementById("db-ww"),
+    wh: document.getElementById("db-wh"),
+    wy: document.getElementById("db-wy"),
+  };
+  const vl = {
+    cz: document.getElementById("dbv-cz"),
+    ox: document.getElementById("dbv-ox"),
+    oy: document.getElementById("dbv-oy"),
+    ww: document.getElementById("dbv-ww"),
+    wh: document.getElementById("dbv-wh"),
+    wy: document.getElementById("dbv-wy"),
+  };
+  // 初期値セット
+  sl.cz.value=CAM.z; sl.ox.value=OFFSET.x; sl.oy.value=OFFSET.y;
   sl.ww.value=WIN.w; sl.wh.value=WIN.h; sl.wy.value=WIN.y;
+
   function upd() {
-    const cx=+sl.cx.value, cy=+sl.cy.value, cz=+sl.cz.value;
+    const cz=+sl.cz.value, ox=+sl.ox.value, oy=+sl.oy.value;
     const ww=+sl.ww.value, wh=+sl.wh.value, wy=+sl.wy.value;
-    vl.cx.textContent=cx.toFixed(2); vl.cy.textContent=cy.toFixed(2); vl.cz.textContent=cz.toFixed(2);
+    vl.cz.textContent=cz.toFixed(2); vl.ox.textContent=ox.toFixed(2); vl.oy.textContent=oy.toFixed(2);
     vl.ww.textContent=ww.toFixed(2); vl.wh.textContent=wh.toFixed(2); vl.wy.textContent=wy.toFixed(2);
+
+    WIN.w=ww; WIN.h=wh; WIN.y=wy;
+    resizeOmamori();
+
+    // CAM.x/y を自動計算
+    const { x: cx, y: cy } = computeCamXY(cz, ox, oy);
+    document.getElementById("dp-computed-xy").textContent =
+      `camX: ${cx.toFixed(3)}\ncamY: ${cy.toFixed(3)}`;
+
     if (!gyroActive) {
       camera.position.set(cx, cy, cz);
       orbit.target.set(cx, cy, 0);
       orbit.update();
     }
-    WIN.w=ww; WIN.h=wh; WIN.y=wy;
-    resizeOmamori();
+
     document.getElementById("debug-output").textContent =
-`const CAM = { x:${cx.toFixed(2)}, y:${cy.toFixed(2)}, z:${cz.toFixed(2)} };
+`const CAM = { z:${cz.toFixed(2)} };
+const OFFSET = { x:${ox.toFixed(2)}, y:${oy.toFixed(2)} };
 const WIN = { w:${ww.toFixed(2)}, h:${wh.toFixed(2)}, y:${wy.toFixed(2)} };`;
   }
-  ids.forEach(k => sl[k].addEventListener("input", upd));
+
+  Object.values(sl).forEach(s => s.addEventListener("input", upd));
   upd();
+
   document.getElementById("debug-copy").addEventListener("click", () => {
     navigator.clipboard.writeText(document.getElementById("debug-output").textContent);
     document.getElementById("debug-copy").textContent = "✅ コピー完了";
@@ -365,32 +446,48 @@ if (!debugMode) {
     if (typeof DeviceOrientationEvent?.requestPermission === "function") {
       gyroBtn.style.display="block"; gyroBtn.addEventListener("click", enableGyro);
       hint.textContent="下のボタンでジャイロを有効にできます";
-    } else { enableGyro(); hint.textContent="📱 スマホを傾けると視点が変わります"; setTimeout(()=>{ hint.style.opacity="0"; },4000); }
-  } else { hint.textContent="🖱 ドラッグで視点を変えよう"; setTimeout(()=>{ hint.style.opacity="0"; },3000); }
+    } else {
+      enableGyro();
+      hint.textContent="📱 スマホを傾けると視点が変わります";
+      setTimeout(()=>{ hint.style.opacity="0"; },4000);
+    }
+  } else {
+    hint.textContent="🖱 ドラッグで視点を変えよう";
+    setTimeout(()=>{ hint.style.opacity="0"; },3000);
+  }
 }
 
 // ── レンダーループ ────────────────────────────────────────
 const clock = new THREE.Clock();
 threeRenderer.setAnimationLoop(() => {
   clock.getDelta();
+  const { x: cx, y: cy } = computeCamXY(CAM.z, OFFSET.x, OFFSET.y);
   if (gyroActive) {
-    const cx=debugMode?+document.getElementById("db-cx").value:CAM.x;
-    const cy=debugMode?+document.getElementById("db-cy").value:CAM.y;
-    const cz=debugMode?+document.getElementById("db-cz").value:CAM.z;
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, cx+targetPanX, 0.07);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, cy+targetPanY, 0.07);
-    camera.position.z = cz;
+    camera.position.z = CAM.z;
     camera.lookAt(cx+targetPanX*0.3, cy+targetPanY*0.3, 0);
-  } else { orbit.update(); }
+  } else {
+    orbit.update();
+  }
   pointLight.intensity = 1.0 + 0.2*Math.sin(clock.elapsedTime*0.9);
   threeRenderer.render(scene, camera);
 });
 
+// リサイズ時もcamX/Yを再計算して追従
 window.addEventListener("resize", () => {
   const w=window.innerWidth, h=window.innerHeight;
   camera.aspect=w/h; camera.updateProjectionMatrix();
-  threeRenderer.setSize(w,h); resizeOmamori();
+  threeRenderer.setSize(w,h);
+  resizeOmamori();
+  if (!gyroActive) {
+    const { x: cx, y: cy } = computeCamXY(CAM.z, OFFSET.x, OFFSET.y);
+    camera.position.set(cx, cy, CAM.z);
+    orbit.target.set(cx, cy, 0);
+    orbit.update();
+  }
 });
+
 const ov = document.getElementById("tap-overlay");
 ov.addEventListener("pointerdown", ()=>ov.classList.add("grabbing"));
 ov.addEventListener("pointerup",   ()=>ov.classList.remove("grabbing"));
