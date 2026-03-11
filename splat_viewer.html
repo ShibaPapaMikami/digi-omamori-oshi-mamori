@@ -115,18 +115,18 @@
   <div class="dp-info">camX/Y は窓の位置から<br>自動計算（端末非依存）</div>
 
   <div class="dp-row">
-    <label>camZ ズーム距離 <span id="dbv-cz">1.20</span></label>
-    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="1.20"/>
+    <label>camZ ズーム距離 <span id="dbv-cz">0.10</span></label>
+    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="0.10"/>
   </div>
 
   <div class="dp-sep">📐 微調整オフセット</div>
   <div class="dp-row">
-    <label>offsetX 左右 <span id="dbv-ox">0.16</span></label>
-    <input type="range" id="db-ox" min="-2" max="2" step="0.02" value="0.16"/>
+    <label>offsetX 左右 <span id="dbv-ox">0.18</span></label>
+    <input type="range" id="db-ox" min="-2" max="2" step="0.02" value="0.18"/>
   </div>
   <div class="dp-row">
-    <label>offsetY 上下 <span id="dbv-oy">0.10</span></label>
-    <input type="range" id="db-oy" min="-2" max="2" step="0.02" value="0.10"/>
+    <label>offsetY 上下 <span id="dbv-oy">-0.06</span></label>
+    <input type="range" id="db-oy" min="-2" max="2" step="0.02" value="-0.06"/>
   </div>
 
   <div class="dp-sep">🪟 窓サイズ</div>
@@ -180,24 +180,24 @@ document.getElementById("talent-name").textContent = talentName || "推し守り
 if (debugMode) document.body.classList.add("debug-on");
 
 // ── ★調整する定数（CAM.x/y は自動計算）★ ───────────────
-const CAM = { z: 1.20 };          // ← 0.10 から引き上げ（遠近感）
-const OFFSET = { x: 0.16, y: 0.10 };
-const WIN = { w: 0.81, h: 0.78, y: 0.12 };
+const CAM    = { z: 0.10 };
+const OFFSET = { x: 0.18, y: -0.06 };
+const WIN    = { w: 0.81, h: 0.78, y: 0.12 };
 // ────────────────────────────────────────────────────────
 
 // ── ★動き感度・範囲設定★ ─────────────────────────────────
 const GYRO = {
   sensitivity: 0.004,
-  panLimit: 0.25,
-  tiltLimit: 0.18,
-  lerpSpeed: 0.025,
+  panLimit:    0.25,
+  tiltLimit:   0.18,
+  lerpSpeed:   0.025,
 };
 const DRAG = {
   rotateSpeed:   0.3,
   zoomSpeed:     0.4,
   dampingFactor: 0.18,
-  minDistance:   0.5,   // ← 近づきすぎ防止
-  maxDistance:   5.0,   // ← 大幅に引けるように（旧 0.5）
+  minDistance:   0.5,
+  maxDistance:   5.0,
 };
 // ────────────────────────────────────────────────────────
 
