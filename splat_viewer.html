@@ -7,8 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&family=Noto+Sans+JP&display=swap" rel="stylesheet"/>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; }
-    canvas { display:block; }
+    html, body { width:100%; height:100%; background:#06060a; overflow:hidden; touch-action:none; }
     #ui-header {
       position:fixed; top:0; left:0; right:0; z-index:100;
       display:flex; align-items:center; padding:44px 20px 14px;
@@ -62,6 +61,24 @@
     #error-panel a { color:#F472B6; font-size:12px; text-decoration:none; }
     #tap-overlay { position:fixed; inset:0; z-index:50; cursor:grab; }
     #tap-overlay.grabbing { cursor:grabbing; }
+    body.debug-on #tap-overlay { right:220px; }
+    #omamori-canvas { position:fixed; inset:0; z-index:20; pointer-events:none; }
+    #debug-panel {
+      display:none;
+      position:fixed; right:0; top:0; bottom:0; z-index:500;
+      width:220px; background:rgba(0,0,0,.88); backdrop-filter:blur(12px);
+      border-left:1px solid #333; padding:60px 16px 20px;
+      overflow-y:auto; font-family:monospace; font-size:12px; color:#ddd;
+      flex-direction:column; gap:12px;
+    }
+    body.debug-on #debug-panel { display:flex; }
+    .dp-row { display:flex; flex-direction:column; gap:3px; }
+    .dp-row label { color:#9CA3AF; font-size:10px; display:flex; justify-content:space-between; }
+    .dp-row label span { color:#34D399; font-weight:700; }
+    .dp-row input[type=range] { width:100%; accent-color:#DB2777; margin:2px 0; }
+    .dp-sep { border-top:1px solid #333; margin:4px 0; font-size:10px; color:#F472B6; font-weight:700; padding-top:8px; }
+    #debug-copy { padding:8px; border-radius:8px; border:none; background:#DB2777; color:white; font-size:11px; cursor:pointer; font-weight:700; }
+    #debug-output { background:#0a0a0a; border:1px solid #333; border-radius:6px; padding:8px; font-size:10px; color:#34D399; white-space:pre; line-height:1.6; overflow-x:auto; }
   </style>
 </head>
 <body>
@@ -76,6 +93,7 @@
   <a href="index.html">← 一覧に戻る</a>
 </div>
 
+<canvas id="omamori-canvas"></canvas>
 <div id="tap-overlay"></div>
 
 <div id="ui-header">
@@ -85,6 +103,37 @@
 </div>
 <div id="hint"></div>
 <button id="gyro-btn">📱 ジャイロを有効にする</button>
+
+<div id="debug-panel">
+  <div style="font-size:11px;color:#F472B6;font-weight:700">🔧 カメラ調整</div>
+  <div class="dp-row">
+    <label>camX 左右 <span id="dbv-cx">0.00</span></label>
+    <input type="range" id="db-cx" min="-3" max="3" step="0.05" value="0"/>
+  </div>
+  <div class="dp-row">
+    <label>camY 上下 <span id="dbv-cy">0.00</span></label>
+    <input type="range" id="db-cy" min="-3" max="3" step="0.05" value="0"/>
+  </div>
+  <div class="dp-row">
+    <label>camZ ズーム <span id="dbv-cz">3.00</span></label>
+    <input type="range" id="db-cz" min="0.3" max="10" step="0.05" value="3"/>
+  </div>
+  <div class="dp-sep">🪟 窓サイズ</div>
+  <div class="dp-row">
+    <label>winW 幅 <span id="dbv-ww">0.62</span></label>
+    <input type="range" id="db-ww" min="0.1" max="0.95" step="0.01" value="0.62"/>
+  </div>
+  <div class="dp-row">
+    <label>winH 高さ <span id="dbv-wh">0.48</span></label>
+    <input type="range" id="db-wh" min="0.1" max="0.95" step="0.01" value="0.48"/>
+  </div>
+  <div class="dp-row">
+    <label>winY 上端位置 <span id="dbv-wy">0.30</span></label>
+    <input type="range" id="db-wy" min="0.05" max="0.85" step="0.01" value="0.30"/>
+  </div>
+  <div id="debug-output"></div>
+  <button id="debug-copy">📋 値をコピー</button>
+</div>
 
 <script type="importmap">
 {
@@ -104,6 +153,7 @@ import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 const params     = new URLSearchParams(location.search);
 const talentId   = params.get("t") || "abe_kayako";
 const talentName = decodeURIComponent(params.get("n") || "");
+const debugMode  = ["localhost","127.0.0.1"].includes(location.hostname) || params.get("debug") === "1";
 
 const accentMap = {
   goto_rara:"#DB2777", tasaki_sakura:"#E11D48", abe_kayako:"#D97706",
@@ -112,7 +162,8 @@ const accentMap = {
 };
 const accent = accentMap[talentId] || "#DB2777";
 document.documentElement.style.setProperty("--accent", accent);
-document.getElementById("talent-name").textContent = talentName ? `${talentName} — 3D` : "3D";
+document.getElementById("talent-name").textContent = talentName || "推し守り";
+if (debugMode) document.body.classList.add("debug-on");
 
 // ── Three.js ──────────────────────────────────────────────
 const W = window.innerWidth, H = window.innerHeight;
@@ -121,96 +172,201 @@ threeRenderer.setSize(W, H);
 threeRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 threeRenderer.setClearColor(0x06060a);
 threeRenderer.domElement.style.cssText = "position:fixed;inset:0;z-index:1;";
-document.body.insertBefore(threeRenderer.domElement, document.getElementById("tap-overlay"));
+document.body.insertBefore(threeRenderer.domElement, document.getElementById("omamori-canvas"));
 
 const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(60, W/H, 0.01, 100);
-camera.position.set(0, 0, 3);
+
+// ── ★調整済み定数★ ───────────────────────────────────────
+const CAM = { x: 0.00, y: 0.40, z: 0.30 };
+const WIN = { w: 0.62, h: 0.48, y: 0.30 };
+// ────────────────────────────────────────────────────────
+
+camera.position.set(CAM.x, CAM.y, CAM.z);
+camera.lookAt(CAM.x, CAM.y, 0);
 
 const orbit = new OrbitControls(camera, document.getElementById("tap-overlay"));
 orbit.enableDamping = true; orbit.dampingFactor = 0.08;
-orbit.enableZoom = true; orbit.minDistance = 0.5; orbit.maxDistance = 8;
-orbit.autoRotate = true; orbit.autoRotateSpeed = 0.5;
-orbit.target.set(0, 0, 0);
+orbit.enableZoom = true; orbit.minDistance = 0.1; orbit.maxDistance = 12;
+orbit.autoRotate = false;
+orbit.target.set(CAM.x, CAM.y, 0);
 
 const spark = new SparkRenderer({ renderer: threeRenderer });
 scene.add(spark);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const pointLight = new THREE.PointLight(new THREE.Color(accent), 1.2, 12);
 pointLight.position.set(1, 2, 2);
 scene.add(pointLight);
 
-// ── Splat 読み込み ────────────────────────────────────────
-const splatURL = `/assets/splats/${talentId}.compressed.ply`;
-let splatMesh  = null;
+// ── お守り描画 ────────────────────────────────────────────
+const omamoriCanvas = document.getElementById("omamori-canvas");
+const oCtx = omamoriCanvas.getContext("2d");
+const omamoriColors = {
+  goto_rara:    { body:"#7c1146", rim:"#F472B6", cord:"#fcd34d", tassel:"#fcd34d" },
+  tasaki_sakura:{ body:"#7f1d1d", rim:"#FB7185", cord:"#fcd34d", tassel:"#fcd34d" },
+  abe_kayako:   { body:"#78350f", rim:"#FBBF24", cord:"#fb7185", tassel:"#fb7185" },
+  ushio_sarina: { body:"#0c4a6e", rim:"#38BDF8", cord:"#fcd34d", tassel:"#fcd34d" },
+  hayashi_yuka: { body:"#3b0764", rim:"#A78BFA", cord:"#fcd34d", tassel:"#fcd34d" },
+  mori_chiharu: { body:"#064e3b", rim:"#34D399", cord:"#fcd34d", tassel:"#fcd34d" },
+  kaito_aiko:   { body:"#7c2d12", rim:"#F97316", cord:"#fcd34d", tassel:"#fcd34d" },
+};
+const colors = omamoriColors[talentId] || omamoriColors.abe_kayako;
 
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+function shade(hex, p) {
+  const n=parseInt(hex.slice(1),16);
+  const r=Math.min(255,Math.max(0,(n>>16)+p)), g=Math.min(255,Math.max(0,((n>>8)&0xff)+p)), b=Math.min(255,Math.max(0,(n&0xff)+p));
+  return `#${((r<<16)|(g<<8)|b).toString(16).padStart(6,"0")}`;
+}
+function drawOmamori(winW_r, winH_r, winY_r) {
+  const cw=omamoriCanvas.width, ch=omamoriCanvas.height;
+  oCtx.clearRect(0,0,cw,ch);
+  const bodyH=ch*0.75, bodyW=bodyH*0.58;
+  const bx=(cw-bodyW)/2, by=(ch-bodyH)/2+ch*0.04, br=18;
+  oCtx.fillStyle="rgba(6,6,10,0.92)";
+  oCtx.fillRect(0,0,cw,ch);
+  oCtx.globalCompositeOperation="destination-out";
+  rr(oCtx,bx,by,bodyW,bodyH,br); oCtx.fillStyle="rgba(255,255,255,1)"; oCtx.fill();
+  oCtx.globalCompositeOperation="source-over";
+  oCtx.globalCompositeOperation="destination-over";
+  const g=oCtx.createLinearGradient(bx,by,bx+bodyW,by+bodyH);
+  g.addColorStop(0,shade(colors.body,30)); g.addColorStop(0.5,colors.body); g.addColorStop(1,shade(colors.body,-20));
+  oCtx.fillStyle=g; rr(oCtx,bx,by,bodyW,bodyH,br); oCtx.fill();
+  oCtx.globalCompositeOperation="source-over";
+  oCtx.strokeStyle=colors.rim; oCtx.lineWidth=3;
+  oCtx.shadowColor=colors.rim; oCtx.shadowBlur=12;
+  rr(oCtx,bx+1.5,by+1.5,bodyW-3,bodyH-3,br-1); oCtx.stroke();
+  oCtx.shadowBlur=0;
+  oCtx.strokeStyle=colors.rim+"55"; oCtx.lineWidth=1;
+  rr(oCtx,bx+8,by+8,bodyW-16,bodyH-16,br-4); oCtx.stroke();
+  const winW=bodyW*winW_r, winH=bodyH*winH_r;
+  const winX=bx+(bodyW-winW)/2, winY=by+bodyH*winY_r, winR=10;
+  oCtx.shadowColor=colors.rim; oCtx.shadowBlur=20;
+  oCtx.strokeStyle=colors.rim; oCtx.lineWidth=2;
+  rr(oCtx,winX,winY,winW,winH,winR); oCtx.stroke();
+  oCtx.shadowBlur=0;
+  oCtx.globalCompositeOperation="destination-out";
+  rr(oCtx,winX,winY,winW,winH,winR); oCtx.fillStyle="rgba(255,255,255,1)"; oCtx.fill();
+  oCtx.globalCompositeOperation="source-over";
+  const kW=bodyW*0.28, kH=bodyH*0.06;
+  const kx=bx+(bodyW-kW)/2, ky=by-kH*0.6;
+  oCtx.fillStyle=colors.cord; oCtx.shadowColor=colors.cord; oCtx.shadowBlur=8;
+  rr(oCtx,kx,ky,kW,kH,kH/2); oCtx.fill(); oCtx.shadowBlur=0;
+  const rx=bx+bodyW/2;
+  oCtx.beginPath(); oCtx.moveTo(rx,ky); oCtx.lineTo(rx,by-kH*3);
+  oCtx.strokeStyle=colors.cord; oCtx.lineWidth=4; oCtx.stroke();
+  const tx=bx+bodyW/2, ty=by+bodyH, tl=bodyH*0.09;
+  for(let i=-2;i<=2;i++){
+    oCtx.beginPath(); oCtx.moveTo(tx+i*5,ty); oCtx.lineTo(tx+i*6,ty+tl);
+    oCtx.strokeStyle=colors.tassel; oCtx.lineWidth=2.5;
+    oCtx.globalAlpha=1-Math.abs(i)*0.15; oCtx.stroke();
+  }
+  oCtx.globalAlpha=1;
+  oCtx.fillStyle=colors.rim;
+  oCtx.font=`bold ${Math.round(bodyW*0.11)}px 'Zen Maru Gothic',serif`;
+  oCtx.textAlign="center";
+  oCtx.shadowColor=colors.rim; oCtx.shadowBlur=8;
+  const tx2=bx+bodyW*0.5, ty2=by+bodyH*0.83;
+  oCtx.fillText("推",tx2,ty2-bodyH*0.055);
+  oCtx.fillText("守",tx2,ty2+bodyH*0.005);
+  oCtx.shadowBlur=0;
+}
+function resizeOmamori() {
+  omamoriCanvas.width=window.innerWidth; omamoriCanvas.height=window.innerHeight;
+  drawOmamori(WIN.w, WIN.h, WIN.y);
+}
+resizeOmamori();
+
+// ── ジャイロ変数（デバッグパネルより前に宣言）────────────
+let gyroActive = false;
+
+// ── Splat 読み込み ────────────────────────────────────────
 try {
-  splatMesh = new SplatMesh({ url: splatURL });
+  const splatMesh = new SplatMesh({ url:`/assets/splats/${talentId}.compressed.ply` });
   splatMesh.rotation.x = Math.PI;
   scene.add(splatMesh);
-
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error("timeout")), 30000);
-    const check = () => {
-      if (splatMesh.numSplats > 0) { clearTimeout(t); resolve(); }
-      else setTimeout(check, 100);
-    };
+    const check = () => splatMesh.numSplats > 0 ? (clearTimeout(t), resolve()) : setTimeout(check, 100);
     check();
   });
-
   const loadEl = document.getElementById("loading");
   loadEl.style.opacity = "0";
   setTimeout(() => loadEl.style.display = "none", 600);
-
 } catch(e) {
-  document.getElementById("loading").style.display     = "none";
+  document.getElementById("loading").style.display = "none";
   document.getElementById("error-panel").style.display = "flex";
 }
 
+// ── デバッグパネル ────────────────────────────────────────
+if (debugMode) {
+  const ids = ["cx","cy","cz","ww","wh","wy"];
+  const sl  = Object.fromEntries(ids.map(k => [k, document.getElementById("db-"+k)]));
+  const vl  = Object.fromEntries(ids.map(k => [k, document.getElementById("dbv-"+k)]));
+  sl.cx.value=CAM.x; sl.cy.value=CAM.y; sl.cz.value=CAM.z;
+  sl.ww.value=WIN.w; sl.wh.value=WIN.h; sl.wy.value=WIN.y;
+  function upd() {
+    const cx=+sl.cx.value, cy=+sl.cy.value, cz=+sl.cz.value;
+    const ww=+sl.ww.value, wh=+sl.wh.value, wy=+sl.wy.value;
+    vl.cx.textContent=cx.toFixed(2); vl.cy.textContent=cy.toFixed(2); vl.cz.textContent=cz.toFixed(2);
+    vl.ww.textContent=ww.toFixed(2); vl.wh.textContent=wh.toFixed(2); vl.wy.textContent=wy.toFixed(2);
+    if (!gyroActive) {
+      camera.position.set(cx, cy, cz);
+      orbit.target.set(cx, cy, 0);
+      orbit.update();
+    }
+    WIN.w=ww; WIN.h=wh; WIN.y=wy;
+    resizeOmamori();
+    document.getElementById("debug-output").textContent =
+`const CAM = { x:${cx.toFixed(2)}, y:${cy.toFixed(2)}, z:${cz.toFixed(2)} };
+const WIN = { w:${ww.toFixed(2)}, h:${wh.toFixed(2)}, y:${wy.toFixed(2)} };`;
+  }
+  ids.forEach(k => sl[k].addEventListener("input", upd));
+  upd();
+  document.getElementById("debug-copy").addEventListener("click", () => {
+    navigator.clipboard.writeText(document.getElementById("debug-output").textContent);
+    document.getElementById("debug-copy").textContent = "✅ コピー完了";
+    setTimeout(() => document.getElementById("debug-copy").textContent = "📋 値をコピー", 1500);
+  });
+}
+
 // ── ジャイロ ──────────────────────────────────────────────
-const isTouch  = "ontouchstart" in window;
-const hint     = document.getElementById("hint");
-const gyroBtn  = document.getElementById("gyro-btn");
-let gyroActive = false;
-let calibrated = false;
-let baseBeta = 0, baseGamma = 0;
-let targetPanX = 0, targetPanY = 0;
+const isTouch = "ontouchstart" in window;
+const hint    = document.getElementById("hint");
+const gyroBtn = document.getElementById("gyro-btn");
+let calibrated=false, baseBeta=0, baseGamma=0, targetPanX=0, targetPanY=0;
 
 function onOrientation(e) {
-  const beta  = e.beta  ?? 0;
-  const gamma = e.gamma ?? 0;
-  if (!calibrated) { baseBeta = beta; baseGamma = gamma; calibrated = true; return; }
-  targetPanX = THREE.MathUtils.clamp((gamma - baseGamma) * 0.012, -1.2, 1.2);
-  targetPanY = THREE.MathUtils.clamp((beta  - baseBeta)  * -0.012, -0.7, 0.7);
+  const b=e.beta??0, g=e.gamma??0;
+  if (!calibrated) { baseBeta=b; baseGamma=g; calibrated=true; return; }
+  targetPanX = THREE.MathUtils.clamp((g-baseGamma)*0.012, -1.2, 1.2);
+  targetPanY = THREE.MathUtils.clamp((b-baseBeta)*-0.012, -0.7, 0.7);
 }
-
 async function enableGyro() {
   if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-    const perm = await DeviceOrientationEvent.requestPermission().catch(() => "denied");
-    if (perm !== "granted") { alert("ジャイロの許可が必要です。"); return; }
+    const p = await DeviceOrientationEvent.requestPermission().catch(()=>"denied");
+    if (p !== "granted") { alert("ジャイロの許可が必要です。"); return; }
   }
   window.addEventListener("deviceorientation", onOrientation, true);
-  gyroActive = true;
-  orbit.enabled    = false;
-  orbit.autoRotate = false;
-  gyroBtn.style.display = "none";
-  hint.textContent = "📱 スマホを傾けると視点が変わります";
-  setTimeout(() => { hint.style.opacity = "0"; }, 4000);
+  gyroActive=true; orbit.enabled=false; orbit.autoRotate=false;
+  gyroBtn.style.display="none";
+  hint.textContent="📱 スマホを傾けると視点が変わります";
+  setTimeout(()=>{ hint.style.opacity="0"; }, 4000);
 }
-
-if (isTouch) {
-  if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-    gyroBtn.style.display = "block";
-    gyroBtn.addEventListener("click", enableGyro);
-    hint.textContent = "下のボタンでジャイロを有効にできます";
-  } else {
-    enableGyro();
-    hint.textContent = "📱 スマホを傾けると視点が変わります";
-    setTimeout(() => { hint.style.opacity = "0"; }, 4000);
-  }
-} else {
-  hint.textContent = "🖱 ドラッグで視点を変えよう";
-  setTimeout(() => { hint.style.opacity = "0"; }, 3000);
+if (!debugMode) {
+  if (isTouch) {
+    if (typeof DeviceOrientationEvent?.requestPermission === "function") {
+      gyroBtn.style.display="block"; gyroBtn.addEventListener("click", enableGyro);
+      hint.textContent="下のボタンでジャイロを有効にできます";
+    } else { enableGyro(); hint.textContent="📱 スマホを傾けると視点が変わります"; setTimeout(()=>{ hint.style.opacity="0"; },4000); }
+  } else { hint.textContent="🖱 ドラッグで視点を変えよう"; setTimeout(()=>{ hint.style.opacity="0"; },3000); }
 }
 
 // ── レンダーループ ────────────────────────────────────────
@@ -218,27 +374,26 @@ const clock = new THREE.Clock();
 threeRenderer.setAnimationLoop(() => {
   clock.getDelta();
   if (gyroActive) {
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetPanX, 0.07);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetPanY, 0.07);
-    camera.position.z = 3;
-    camera.lookAt(0, 0, 0);
-  } else {
-    orbit.update();
-  }
-  pointLight.intensity = 1.0 + 0.25 * Math.sin(clock.elapsedTime * 0.9);
+    const cx=debugMode?+document.getElementById("db-cx").value:CAM.x;
+    const cy=debugMode?+document.getElementById("db-cy").value:CAM.y;
+    const cz=debugMode?+document.getElementById("db-cz").value:CAM.z;
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cx+targetPanX, 0.07);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, cy+targetPanY, 0.07);
+    camera.position.z = cz;
+    camera.lookAt(cx+targetPanX*0.3, cy+targetPanY*0.3, 0);
+  } else { orbit.update(); }
+  pointLight.intensity = 1.0 + 0.2*Math.sin(clock.elapsedTime*0.9);
   threeRenderer.render(scene, camera);
 });
 
 window.addEventListener("resize", () => {
-  const w = window.innerWidth, h = window.innerHeight;
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  threeRenderer.setSize(w, h);
+  const w=window.innerWidth, h=window.innerHeight;
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  threeRenderer.setSize(w,h); resizeOmamori();
 });
-
-const overlay = document.getElementById("tap-overlay");
-overlay.addEventListener("pointerdown", () => overlay.classList.add("grabbing"));
-overlay.addEventListener("pointerup",   () => overlay.classList.remove("grabbing"));
+const ov = document.getElementById("tap-overlay");
+ov.addEventListener("pointerdown", ()=>ov.classList.add("grabbing"));
+ov.addEventListener("pointerup",   ()=>ov.classList.remove("grabbing"));
 </script>
 </body>
 </html>
