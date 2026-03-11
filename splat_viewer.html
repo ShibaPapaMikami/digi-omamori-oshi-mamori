@@ -115,32 +115,32 @@
   <div class="dp-info">camX/Y は窓の位置から<br>自動計算（端末非依存）</div>
 
   <div class="dp-row">
-    <label>camZ ズーム距離 <span id="dbv-cz">0.30</span></label>
-    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="0.30"/>
+    <label>camZ ズーム距離 <span id="dbv-cz">0.10</span></label>
+    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="0.10"/>
   </div>
 
   <div class="dp-sep">📐 微調整オフセット</div>
   <div class="dp-row">
-    <label>offsetX 左右 <span id="dbv-ox">0.00</span></label>
-    <input type="range" id="db-ox" min="-2" max="2" step="0.02" value="0"/>
+    <label>offsetX 左右 <span id="dbv-ox">0.16</span></label>
+    <input type="range" id="db-ox" min="-2" max="2" step="0.02" value="0.16"/>
   </div>
   <div class="dp-row">
-    <label>offsetY 上下 <span id="dbv-oy">0.00</span></label>
-    <input type="range" id="db-oy" min="-2" max="2" step="0.02" value="0"/>
+    <label>offsetY 上下 <span id="dbv-oy">0.10</span></label>
+    <input type="range" id="db-oy" min="-2" max="2" step="0.02" value="0.10"/>
   </div>
 
   <div class="dp-sep">🪟 窓サイズ</div>
   <div class="dp-row">
-    <label>winW 幅 <span id="dbv-ww">0.62</span></label>
-    <input type="range" id="db-ww" min="0.1" max="0.95" step="0.01" value="0.62"/>
+    <label>winW 幅 <span id="dbv-ww">0.81</span></label>
+    <input type="range" id="db-ww" min="0.1" max="0.95" step="0.01" value="0.81"/>
   </div>
   <div class="dp-row">
-    <label>winH 高さ <span id="dbv-wh">0.48</span></label>
-    <input type="range" id="db-wh" min="0.1" max="0.95" step="0.01" value="0.48"/>
+    <label>winH 高さ <span id="dbv-wh">0.78</span></label>
+    <input type="range" id="db-wh" min="0.1" max="0.95" step="0.01" value="0.78"/>
   </div>
   <div class="dp-row">
-    <label>winY 上端位置 <span id="dbv-wy">0.30</span></label>
-    <input type="range" id="db-wy" min="0.05" max="0.85" step="0.01" value="0.30"/>
+    <label>winY 上端位置 <span id="dbv-wy">0.12</span></label>
+    <input type="range" id="db-wy" min="0.05" max="0.85" step="0.01" value="0.12"/>
   </div>
 
   <div class="dp-computed" id="dp-computed-xy">camX: 0.00<br>camY: 0.00</div>
@@ -180,50 +180,34 @@ document.getElementById("talent-name").textContent = talentName || "推し守り
 if (debugMode) document.body.classList.add("debug-on");
 
 // ── ★調整する定数（CAM.x/y は自動計算）★ ───────────────
-const CAM = { z: 0.30 };          // ズームだけ手動
-const OFFSET = { x: 0.00, y: 0.00 }; // 微調整用オフセット
-const WIN = { w: 0.62, h: 0.48, y: 0.30 };
+const CAM = { z: 0.10 };          // ズームだけ手動
+const OFFSET = { x: 0.16, y: 0.10 }; // 微調整用オフセット
+const WIN = { w: 0.81, h: 0.78, y: 0.12 };
 // ────────────────────────────────────────────────────────
 
 const FOV = 60; // PerspectiveCamera の fov と同じ値
 
 /**
  * 窓の中心スクリーン座標 → 逆投影 → camX/Y を自動計算
- * これにより「窓の中心にワールド原点が来るカメラ位置」が決まる
  */
 function computeCamXY(camZ, offsetX, offsetY) {
   const W = window.innerWidth, H = window.innerHeight;
   const aspect = W / H;
-
-  // お守りの描画パラメータ（drawOmamori と完全一致）
   const bodyH = H * 0.75;
   const bodyW = bodyH * 0.58;
   const bx = (W - bodyW) / 2;
   const by = (H - bodyH) / 2 + H * 0.04;
-
-  // 窓の中心座標（スクリーンpx）
   const winW_px = bodyW * WIN.w;
   const winH_px = bodyH * WIN.h;
   const winX_px = bx + (bodyW - winW_px) / 2;
   const winY_px = by + bodyH * WIN.y;
-  const winCX   = winX_px + winW_px / 2; // 常に W/2（水平中央）
+  const winCX   = winX_px + winW_px / 2;
   const winCY   = winY_px + winH_px / 2;
-
-  // NDC に変換（-1 〜 1）
-  const ndcX = (winCX / W) * 2 - 1;        // ≒ 0（水平中央）
+  const ndcX = (winCX / W) * 2 - 1;
   const ndcY = 1 - (winCY / H) * 2;
-
-  // 逆投影: カメラが (cx, cy, camZ) から (cx, cy, 0) を見るとき
-  //   ワールド原点が ndcX/Y に投影されるには:
-  //   ndcX = (0 - cx) / camZ * f / aspect  →  cx = -ndcX * camZ * aspect / f
-  //   ndcY = (0 - cy) / camZ * f           →  cy = -ndcY * camZ / f
-  //   ただし「カメラが (cx,cy,camZ) を見る先 = (cx,cy,0)」なので
-  //   ビュー空間でのワールド原点は (-cx, -cy, -camZ) になる
-  //   → 符号を合わせると:
   const f  = 1 / Math.tan((FOV / 2) * Math.PI / 180);
   const cx = -ndcX * camZ * aspect / f + offsetX;
   const cy = -ndcY * camZ / f + offsetY;
-
   return { x: cx, y: cy };
 }
 
@@ -378,7 +362,6 @@ if (debugMode) {
     wh: document.getElementById("dbv-wh"),
     wy: document.getElementById("dbv-wy"),
   };
-  // 初期値セット
   sl.cz.value=CAM.z; sl.ox.value=OFFSET.x; sl.oy.value=OFFSET.y;
   sl.ww.value=WIN.w; sl.wh.value=WIN.h; sl.wy.value=WIN.y;
 
@@ -387,30 +370,23 @@ if (debugMode) {
     const ww=+sl.ww.value, wh=+sl.wh.value, wy=+sl.wy.value;
     vl.cz.textContent=cz.toFixed(2); vl.ox.textContent=ox.toFixed(2); vl.oy.textContent=oy.toFixed(2);
     vl.ww.textContent=ww.toFixed(2); vl.wh.textContent=wh.toFixed(2); vl.wy.textContent=wy.toFixed(2);
-
     WIN.w=ww; WIN.h=wh; WIN.y=wy;
     resizeOmamori();
-
-    // CAM.x/y を自動計算
     const { x: cx, y: cy } = computeCamXY(cz, ox, oy);
     document.getElementById("dp-computed-xy").textContent =
       `camX: ${cx.toFixed(3)}\ncamY: ${cy.toFixed(3)}`;
-
     if (!gyroActive) {
       camera.position.set(cx, cy, cz);
       orbit.target.set(cx, cy, 0);
       orbit.update();
     }
-
     document.getElementById("debug-output").textContent =
 `const CAM = { z:${cz.toFixed(2)} };
 const OFFSET = { x:${ox.toFixed(2)}, y:${oy.toFixed(2)} };
 const WIN = { w:${ww.toFixed(2)}, h:${wh.toFixed(2)}, y:${wy.toFixed(2)} };`;
   }
-
   Object.values(sl).forEach(s => s.addEventListener("input", upd));
   upd();
-
   document.getElementById("debug-copy").addEventListener("click", () => {
     navigator.clipboard.writeText(document.getElementById("debug-output").textContent);
     document.getElementById("debug-copy").textContent = "✅ コピー完了";
@@ -474,7 +450,6 @@ threeRenderer.setAnimationLoop(() => {
   threeRenderer.render(scene, camera);
 });
 
-// リサイズ時もcamX/Yを再計算して追従
 window.addEventListener("resize", () => {
   const w=window.innerWidth, h=window.innerHeight;
   camera.aspect=w/h; camera.updateProjectionMatrix();
