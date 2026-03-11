@@ -115,8 +115,8 @@
   <div class="dp-info">camX/Y は窓の位置から<br>自動計算（端末非依存）</div>
 
   <div class="dp-row">
-    <label>camZ ズーム距離 <span id="dbv-cz">0.10</span></label>
-    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="0.10"/>
+    <label>camZ ズーム距離 <span id="dbv-cz">1.20</span></label>
+    <input type="range" id="db-cz" min="0.1" max="8" step="0.05" value="1.20"/>
   </div>
 
   <div class="dp-sep">📐 微調整オフセット</div>
@@ -180,16 +180,29 @@ document.getElementById("talent-name").textContent = talentName || "推し守り
 if (debugMode) document.body.classList.add("debug-on");
 
 // ── ★調整する定数（CAM.x/y は自動計算）★ ───────────────
-const CAM = { z: 0.10 };          // ズームだけ手動
-const OFFSET = { x: 0.16, y: 0.10 }; // 微調整用オフセット
+const CAM = { z: 1.20 };          // ← 0.10 から引き上げ（遠近感）
+const OFFSET = { x: 0.16, y: 0.10 };
 const WIN = { w: 0.81, h: 0.78, y: 0.12 };
 // ────────────────────────────────────────────────────────
 
-const FOV = 60; // PerspectiveCamera の fov と同じ値
+// ── ★動き感度・範囲設定★ ─────────────────────────────────
+const GYRO = {
+  sensitivity: 0.004,
+  panLimit: 0.25,
+  tiltLimit: 0.18,
+  lerpSpeed: 0.025,
+};
+const DRAG = {
+  rotateSpeed:   0.3,
+  zoomSpeed:     0.4,
+  dampingFactor: 0.18,
+  minDistance:   0.5,   // ← 近づきすぎ防止
+  maxDistance:   5.0,   // ← 大幅に引けるように（旧 0.5）
+};
+// ────────────────────────────────────────────────────────
 
-/**
- * 窓の中心スクリーン座標 → 逆投影 → camX/Y を自動計算
- */
+const FOV = 60;
+
 function computeCamXY(camZ, offsetX, offsetY) {
   const W = window.innerWidth, H = window.innerHeight;
   const aspect = W / H;
@@ -228,9 +241,16 @@ camera.position.set(initCam.x, initCam.y, CAM.z);
 camera.lookAt(initCam.x, initCam.y, 0);
 
 const orbit = new OrbitControls(camera, document.getElementById("tap-overlay"));
-orbit.enableDamping = true; orbit.dampingFactor = 0.08;
-orbit.enableZoom = true; orbit.minDistance = 0.05; orbit.maxDistance = 12;
-orbit.autoRotate = false;
+orbit.enableDamping    = true;
+orbit.dampingFactor    = DRAG.dampingFactor;
+orbit.rotateSpeed      = DRAG.rotateSpeed;
+orbit.zoomSpeed        = DRAG.zoomSpeed;
+orbit.enableZoom       = true;
+orbit.minDistance      = DRAG.minDistance;
+orbit.maxDistance      = DRAG.maxDistance;
+orbit.autoRotate       = false;
+orbit.minPolarAngle    = Math.PI / 2 - 0.5;
+orbit.maxPolarAngle    = Math.PI / 2 + 0.5;
 orbit.target.set(initCam.x, initCam.y, 0);
 
 const spark = new SparkRenderer({ renderer: threeRenderer });
@@ -403,8 +423,8 @@ let calibrated=false, baseBeta=0, baseGamma=0, targetPanX=0, targetPanY=0;
 function onOrientation(e) {
   const b=e.beta??0, g=e.gamma??0;
   if (!calibrated) { baseBeta=b; baseGamma=g; calibrated=true; return; }
-  targetPanX = THREE.MathUtils.clamp((g-baseGamma)*0.012, -1.2, 1.2);
-  targetPanY = THREE.MathUtils.clamp((b-baseBeta)*-0.012, -0.7, 0.7);
+  targetPanX = THREE.MathUtils.clamp((g - baseGamma) * GYRO.sensitivity, -GYRO.panLimit,  GYRO.panLimit);
+  targetPanY = THREE.MathUtils.clamp((b - baseBeta)  * -GYRO.sensitivity, -GYRO.tiltLimit, GYRO.tiltLimit);
 }
 async function enableGyro() {
   if (typeof DeviceOrientationEvent?.requestPermission === "function") {
@@ -439,10 +459,10 @@ threeRenderer.setAnimationLoop(() => {
   clock.getDelta();
   const { x: cx, y: cy } = computeCamXY(CAM.z, OFFSET.x, OFFSET.y);
   if (gyroActive) {
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cx+targetPanX, 0.07);
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, cy+targetPanY, 0.07);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, cx + targetPanX, GYRO.lerpSpeed);
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, cy + targetPanY, GYRO.lerpSpeed);
     camera.position.z = CAM.z;
-    camera.lookAt(cx+targetPanX*0.3, cy+targetPanY*0.3, 0);
+    camera.lookAt(cx + targetPanX * 0.3, cy + targetPanY * 0.3, 0);
   } else {
     orbit.update();
   }
