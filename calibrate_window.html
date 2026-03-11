@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Window Mask Calibration</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; color:white; font-family:monospace; display:flex; height:100vh; overflow:hidden; }
+#sidebar { width:280px; min-width:280px; background:#1a1a1a; border-right:1px solid #333; display:flex; flex-direction:column; overflow-y:auto; }
+.section { padding:14px 16px; border-bottom:1px solid #2a2a2a; }
+.section h3 { font-size:11px; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+select, button { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #333; background:#2a2a2a; color:white; font-size:12px; cursor:pointer; margin-bottom:6px; }
+button { background:#DB2777; border-color:#DB2777; font-weight:700; }
+button:hover { background:#BE185D; }
+.val-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-size:12px; }
+.val-row label { color:#9CA3AF; }
+.val-row span { color:#34D399; font-weight:700; }
+input[type=range] { width:100%; accent-color:#DB2777; margin:4px 0; }
+#aspect-lock-row { display:flex; align-items:center; gap:10px; padding:10px 0 6px; font-size:12px; color:#9CA3AF; }
+#aspect-lock { width:18px; height:18px; cursor:pointer; accent-color:#DB2777; }
+#aspect-badge { margin-left:auto; font-size:10px; padding:2px 8px; border-radius:10px; background:#DB277730; color:#F472B6; border:1px solid #DB277760; display:none; }
+#aspect-badge.on { display:block; }
+#output { background:#0a0a0a; border:1px solid #333; border-radius:8px; padding:10px; font-size:11px; color:#34D399; white-space:pre; line-height:1.6; cursor:pointer; transition:background .2s; }
+#output:hover { background:#1a1a1a; }
+#copy-hint { font-size:10px; color:#6B7280; margin-top:4px; text-align:right; }
+#preview-wrap { flex:1; position:relative; overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; }
+#preview-img { max-width:100%; max-height:100vh; object-fit:contain; display:block; user-select:none; -webkit-user-drag:none; }
+#overlay-canvas { position:absolute; inset:0; pointer-events:none; }
+#drag-rect { position:absolute; border:2px solid #EF4444; background:rgba(239,68,68,.08); cursor:move; box-shadow:0 0 0 1px rgba(239,68,68,.4); }
+.handle { position:absolute; width:12px; height:12px; background:#EF4444; border:2px solid white; border-radius:3px; }
+.handle.tl { top:-6px; left:-6px; cursor:nwse-resize; }
+.handle.tr { top:-6px; right:-6px; cursor:nesw-resize; }
+.handle.bl { bottom:-6px; left:-6px; cursor:nesw-resize; }
+.handle.br { bottom:-6px; right:-6px; cursor:nwse-resize; }
+.handle.tc { top:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+.handle.bc { bottom:-6px; left:calc(50% - 6px); cursor:ns-resize; }
+.handle.lc { top:calc(50% - 6px); left:-6px; cursor:ew-resize; }
+.handle.rc { top:calc(50% - 6px); right:-6px; cursor:ew-resize; }
+body.aspect-locked .handle.tc,
+body.aspect-locked .handle.bc { opacity:0.3; cursor:not-allowed; }
+#info-badge { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.7); backdrop-filter:blur(8px); border:1px solid #333; border-radius:20px; padding:6px 16px; font-size:11px; color:#9CA3AF; white-space:nowrap; pointer-events:none; }
+body.aspect-locked #drag-rect { border-color:#A78BFA; box-shadow:0 0 0 1px rgba(167,139,250,.4); }
+body.aspect-locked .handle { background:#A78BFA; }
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <div class="section">
+    <h3>📸 写真を選択</h3>
+    <select id="talent-sel">
+      <option value="abe_kayako"    data-photo="/assets/omamori/abe_kayako/_93A1111.jpg">阿部華也子</option>
+      <option value="goto_rara"     data-photo="/assets/omamori/goto_rara/_93A1220.jpg">後藤楽々</option>
+      <option value="tasaki_sakura" data-photo="/assets/omamori/tasaki_sakura/_93A0115.jpg">田﨑さくら</option>
+      <option value="ushio_sarina"  data-photo="/assets/omamori/ushio_sarina/_93A0259.jpg">潮紗理菜</option>
+      <option value="hayashi_yuka"  data-photo="/assets/omamori/hayashi_yuka/_93A0098.jpg">林佑香</option>
+      <option value="mori_chiharu"  data-photo="/assets/omamori/mori_chiharu/_S3_1569.jpg">森千晴</option>
+      <option value="kaito_aiko"    data-photo="/assets/omamori/kaito_aiko/_93A3111.jpg">皆藤愛子</option>
+    </select>
+  </div>
+  <div class="section">
+    <h3>📐 現在の値</h3>
+    <div class="val-row"><label>X (左端)</label><span id="v-x">0.330</span></div>
+    <div class="val-row"><label>Y (上端)</label><span id="v-y">0.320</span></div>
+    <div class="val-row"><label>W (幅)</label><span id="v-w">0.300</span></div>
+    <div class="val-row"><label>H (高さ)</label><span id="v-h">0.320</span></div>
+  </div>
+  <div class="section">
+    <h3>🎛 微調整スライダー</h3>
+    <div id="aspect-lock-row">
+      <input type="checkbox" id="aspect-lock"/>
+      <label for="aspect-lock" style="cursor:pointer;user-select:none">9:16 縦固定</label>
+      <span id="aspect-badge">🔒 9:16</span>
+    </div>
+    <label style="font-size:11px;color:#9CA3AF">X: <span id="sl-x-v"></span></label>
+    <input type="range" id="sl-x" min="0" max="0.9" step="0.005"/>
+    <label style="font-size:11px;color:#9CA3AF">Y: <span id="sl-y-v"></span></label>
+    <input type="range" id="sl-y" min="0" max="0.9" step="0.005"/>
+    <label style="font-size:11px;color:#9CA3AF">W (幅): <span id="sl-w-v"></span></label>
+    <input type="range" id="sl-w" min="0.05" max="0.9" step="0.005"/>
+    <label style="font-size:11px;color:#9CA3AF" id="h-label">H (高さ): <span id="sl-h-v"></span></label>
+    <input type="range" id="sl-h" min="0.05" max="0.9" step="0.005"/>
+  </div>
+  <div class="section">
+    <h3>📋 コードをコピー</h3>
+    <div id="output" onclick="copyOutput()" title="クリックでコピー"></div>
+    <div id="copy-hint">クリックでコピー</div>
+    <div id="copy-done" style="display:none;color:#34D399;font-size:11px;text-align:center;margin-top:4px">✅ コピーしました！</div>
+  </div>
+  <div class="section">
+    <h3>💡 使い方</h3>
+    <div style="font-size:11px;color:#6B7280;line-height:1.8">
+      赤枠を<b style="color:#ddd">ドラッグ</b>で移動<br>
+      角の■で<b style="color:#ddd">リサイズ</b><br>
+      <b style="color:#A78BFA">9:16固定ON</b>でW変更時にH自動追従<br>
+      コードをコピーして<br>
+      <code style="color:#F472B6">splat_viewer.html</code>の<br>
+      <code style="color:#F472B6">WINDOW_RECT</code>に貼付
+    </div>
+  </div>
+</div>
+
+<div id="preview-wrap">
+  <img id="preview-img" src="" alt=""/>
+  <canvas id="overlay-canvas"></canvas>
+  <div id="drag-rect">
+    <div class="handle tl" data-dir="tl"></div>
+    <div class="handle tr" data-dir="tr"></div>
+    <div class="handle bl" data-dir="bl"></div>
+    <div class="handle br" data-dir="br"></div>
+    <div class="handle tc" data-dir="tc"></div>
+    <div class="handle bc" data-dir="bc"></div>
+    <div class="handle lc" data-dir="lc"></div>
+    <div class="handle rc" data-dir="rc"></div>
+  </div>
+  <div id="info-badge">赤枠をドラッグして窓の位置に合わせてください</div>
+</div>
+
+<script>
+const INIT_RECTS = {
+  abe_kayako:   { x:0.33, y:0.32, w:0.30, h:0.32 },
+  goto_rara:    { x:0.33, y:0.30, w:0.32, h:0.33 },
+  tasaki_sakura:{ x:0.33, y:0.30, w:0.32, h:0.33 },
+  ushio_sarina: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  hayashi_yuka: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  mori_chiharu: { x:0.33, y:0.30, w:0.32, h:0.33 },
+  kaito_aiko:   { x:0.33, y:0.30, w:0.32, h:0.33 },
+};
+
+const saved   = Object.fromEntries(Object.entries(INIT_RECTS).map(([k,v])=>[k,{...v}]));
+let currentId    = "abe_kayako";
+let rect         = { ...saved[currentId] };
+let aspectLocked = false;
+
+const imgEl    = document.getElementById("preview-img");
+const wrapEl   = document.getElementById("preview-wrap");
+const dragEl   = document.getElementById("drag-rect");
+const canvasEl = document.getElementById("overlay-canvas");
+const ctx      = canvasEl.getContext("2d");
+const lockChk  = document.getElementById("aspect-lock");
+const hSlider  = document.getElementById("sl-h");
+const hLabel   = document.getElementById("h-label");
+const lockBadge= document.getElementById("aspect-badge");
+
+// ── 9:16 固定 ──────────────────────────────────────────
+// スクリーン上でピクセルH/ピクセルW = 16/9 になるようH比率を計算
+// pixel_w = rect.w * displayW,  pixel_h = rect.h * displayH
+// displayW/displayH = natW/natH = natAspect
+// → rect.h = rect.w * (16/9) * natAspect   ← ここが重要: * natAspect（÷ではない）
+function applyAspect() {
+  const natAspect = (imgEl.naturalWidth || 1) / (imgEl.naturalHeight || 1);
+  rect.h = rect.w * (16 / 9) * natAspect;          // ← 正しい式
+  rect.h = Math.min(rect.h, 1 - rect.y);
+}
+
+lockChk.addEventListener("change", () => {
+  aspectLocked = lockChk.checked;
+  document.body.classList.toggle("aspect-locked", aspectLocked);
+  lockBadge.classList.toggle("on", aspectLocked);
+  hSlider.disabled  = aspectLocked;
+  hLabel.style.opacity = aspectLocked ? "0.4" : "1";
+  if (aspectLocked) { applyAspect(); saved[currentId] = {...rect}; syncSliders(); syncAll(); }
+});
+
+// ── タレント切替 ────────────────────────────────────────
+const sel = document.getElementById("talent-sel");
+sel.addEventListener("change", () => {
+  currentId = sel.value;
+  rect = { ...saved[currentId] };
+  imgEl.src = sel.options[sel.selectedIndex].dataset.photo;
+});
+imgEl.onload = () => {
+  if (aspectLocked) applyAspect();
+  syncSliders(); syncAll();
+};
+imgEl.src = sel.options[0].dataset.photo;
+
+// ── スライダー ───────────────────────────────────────────
+const sliders = { x: document.getElementById("sl-x"), y: document.getElementById("sl-y"), w: document.getElementById("sl-w"), h: hSlider };
+function syncSliders() {
+  for (const k of ["x","y","w","h"]) {
+    sliders[k].value = rect[k];
+    document.getElementById(`sl-${k}-v`).textContent = rect[k].toFixed(3);
+  }
+}
+["x","y","w","h"].forEach(k => {
+  sliders[k].addEventListener("input", () => {
+    rect[k] = parseFloat(sliders[k].value);
+    if (aspectLocked && (k === "w" || k === "x" || k === "y")) applyAspect();
+    saved[currentId] = {...rect};
+    syncSliders(); syncAll();
+  });
+});
+
+// ── 画像表示領域 ────────────────────────────────────────
+function getImgBounds() {
+  const wr = wrapEl.getBoundingClientRect();
+  const iw = imgEl.naturalWidth || 1, ih = imgEl.naturalHeight || 1;
+  const scale = Math.min(wr.width / iw, wr.height / ih);
+  const dw = iw * scale, dh = ih * scale;
+  return { x:(wr.width-dw)/2, y:(wr.height-dh)/2, w:dw, h:dh };
+}
+
+// ── 描画同期 ────────────────────────────────────────────
+function syncAll() {
+  const b = getImgBounds();
+  const px = b.x + rect.x * b.w, py = b.y + rect.y * b.h;
+  const pw = rect.w * b.w,       ph = rect.h * b.h;
+  dragEl.style.left = px+"px"; dragEl.style.top  = py+"px";
+  dragEl.style.width= pw+"px"; dragEl.style.height=ph+"px";
+  for (const k of ["x","y","w","h"])
+    document.getElementById(`v-${k}`).textContent = rect[k].toFixed(3);
+  updateOutput();
+  drawCanvas(b, px, py, pw, ph);
+}
+
+function drawCanvas(b, px, py, pw, ph) {
+  canvasEl.width = wrapEl.clientWidth; canvasEl.height = wrapEl.clientHeight;
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.globalCompositeOperation = "destination-out";
+  const r = 6;
+  ctx.beginPath();
+  ctx.moveTo(px+r,py); ctx.lineTo(px+pw-r,py); ctx.quadraticCurveTo(px+pw,py,px+pw,py+r);
+  ctx.lineTo(px+pw,py+ph-r); ctx.quadraticCurveTo(px+pw,py+ph,px+pw-r,py+ph);
+  ctx.lineTo(px+r,py+ph); ctx.quadraticCurveTo(px,py+ph,px,py+ph-r);
+  ctx.lineTo(px,py+r); ctx.quadraticCurveTo(px,py,px+r,py);
+  ctx.closePath(); ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.strokeStyle = aspectLocked ? "rgba(167,139,250,0.7)" : "rgba(239,68,68,0.6)";
+  ctx.lineWidth = 1.5; ctx.stroke();
+}
+
+// ── コード出力 ──────────────────────────────────────────
+function updateOutput() {
+  const lines = Object.entries(saved).map(([id,r]) =>
+    `  ${id.padEnd(16)}: { x:${r.x.toFixed(3)}, y:${r.y.toFixed(3)}, w:${r.w.toFixed(3)}, h:${r.h.toFixed(3)} },`
+  ).join("\n");
+  document.getElementById("output").textContent = `const WINDOW_RECT = {\n${lines}\n};`;
+}
+function copyOutput() {
+  navigator.clipboard.writeText(document.getElementById("output").textContent).then(() => {
+    const d = document.getElementById("copy-done");
+    d.style.display = "block";
+    setTimeout(() => d.style.display = "none", 1800);
+  });
+}
+
+// ── ドラッグ操作 ────────────────────────────────────────
+let dragging = null;
+
+dragEl.addEventListener("pointerdown", (e) => {
+  if (e.target !== dragEl) return;
+  e.preventDefault();
+  dragging = { type:"move", startX:e.clientX, startY:e.clientY, startRect:{...rect} };
+  dragEl.setPointerCapture(e.pointerId);
+});
+
+dragEl.querySelectorAll(".handle").forEach(h => {
+  h.addEventListener("pointerdown", (e) => {
+    e.stopPropagation(); e.preventDefault();
+    const dir = h.dataset.dir;
+    if (aspectLocked && (dir === "tc" || dir === "bc")) return;
+    dragging = { type:"resize", dir, startX:e.clientX, startY:e.clientY, startRect:{...rect} };
+    h.setPointerCapture(e.pointerId);
+  });
+});
+
+window.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const b  = getImgBounds();
+  const dx = (e.clientX - dragging.startX) / b.w;
+  const dy = (e.clientY - dragging.startY) / b.h;
+  const sr = dragging.startRect;
+
+  if (dragging.type === "move") {
+    rect.x = Math.max(0, Math.min(1 - sr.w, sr.x + dx));
+    rect.y = Math.max(0, Math.min(1 - sr.h, sr.y + dy));
+  } else {
+    const dir = dragging.dir;
+    let { x, y, w, h } = sr;
+    if (dir.includes("r") || dir === "rc") w = Math.max(0.02, w + dx);
+    if (dir.includes("l") || dir === "lc") { x = Math.min(x + w - 0.02, x + dx); w = Math.max(0.02, w - dx); }
+    if (!aspectLocked) {
+      if (dir.includes("b") || dir === "bc") h = Math.max(0.02, h + dy);
+      if (dir.includes("t") || dir === "tc") { y = Math.min(y + h - 0.02, y + dy); h = Math.max(0.02, h - dy); }
+    }
+    rect = { x, y, w, h };
+    if (aspectLocked) applyAspect();
+  }
+  rect.x = Math.max(0, Math.min(1, rect.x));
+  rect.y = Math.max(0, Math.min(1, rect.y));
+  saved[currentId] = {...rect};
+  syncSliders(); syncAll();
+});
+
+window.addEventListener("pointerup", () => { dragging = null; });
+window.addEventListener("resize", syncAll);
+</script>
+</body>
+</html>

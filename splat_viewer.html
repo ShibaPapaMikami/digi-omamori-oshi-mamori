@@ -9,10 +9,7 @@
     * { margin:0; padding:0; box-sizing:border-box; }
     html, body { width:100%; height:100%; background:#000; overflow:hidden; touch-action:none; }
     canvas { display:block; }
-    #photo-overlay {
-      position:fixed; inset:0; z-index:20;
-      pointer-events:none;
-    }
+    #photo-overlay { position:fixed; inset:0; z-index:20; pointer-events:none; }
     #ui-header {
       position:fixed; top:0; left:0; right:0; z-index:100;
       display:flex; align-items:center; padding:44px 20px 14px;
@@ -108,23 +105,22 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
 
-// ── URLパラメータ ──────────────────────────────────
 const params     = new URLSearchParams(location.search);
 const talentId   = params.get("t") || "abe_kayako";
 const talentName = decodeURIComponent(params.get("n") || "");
 const photoUrl   = decodeURIComponent(params.get("p") || "");
 
-// 窓の位置（各タレントの写真に合わせて調整: x, y, w, h — 0〜1の比率）
+// 窓マスク位置（calibrate_window.html で調整した値）
 const WINDOW_RECT = {
-  goto_rara:    { x:0.33, y:0.30, w:0.32, h:0.33 },
-  tasaki_sakura:{ x:0.33, y:0.30, w:0.32, h:0.33 },
-  abe_kayako:   { x:0.33, y:0.32, w:0.30, h:0.32 },
-  ushio_sarina: { x:0.33, y:0.30, w:0.32, h:0.33 },
-  hayashi_yuka: { x:0.33, y:0.30, w:0.32, h:0.33 },
-  mori_chiharu: { x:0.33, y:0.30, w:0.32, h:0.33 },
-  kaito_aiko:   { x:0.33, y:0.30, w:0.32, h:0.33 },
+  abe_kayako:   { x:0.160, y:0.020, w:0.545, h:0.646 },
+  goto_rara:    { x:0.160, y:0.020, w:0.545, h:0.646 },
+  tasaki_sakura:{ x:0.160, y:0.020, w:0.545, h:0.646 },
+  ushio_sarina: { x:0.160, y:0.020, w:0.545, h:0.646 },
+  hayashi_yuka: { x:0.160, y:0.020, w:0.545, h:0.646 },
+  mori_chiharu: { x:0.160, y:0.020, w:0.545, h:0.646 },
+  kaito_aiko:   { x:0.160, y:0.020, w:0.545, h:0.646 },
 };
-const winRect = WINDOW_RECT[talentId] || { x:0.33, y:0.30, w:0.32, h:0.33 };
+const winRect = WINDOW_RECT[talentId] || WINDOW_RECT.abe_kayako;
 
 const accentMap = {
   goto_rara:"#DB2777", tasaki_sakura:"#E11D48", abe_kayako:"#D97706",
@@ -135,7 +131,6 @@ const accent = accentMap[talentId] || "#DB2777";
 document.documentElement.style.setProperty("--accent", accent);
 document.getElementById("talent-name").textContent = talentName ? `${talentName} — 3D` : "3D";
 
-// ── Three.js セットアップ ──────────────────────────
 const W = window.innerWidth, H = window.innerHeight;
 const threeRenderer = new THREE.WebGLRenderer({ antialias:true });
 threeRenderer.setSize(W, H);
@@ -169,43 +164,28 @@ photoCanvas.style.cssText = "position:fixed;inset:0;z-index:20;pointer-events:no
 const pCtx = photoCanvas.getContext("2d");
 
 function drawPhotoOverlay(img) {
-  pCtx.clearRect(0, 0, W, H);
-  pCtx.drawImage(img, 0, 0, W, H);
+  pCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+  pCtx.drawImage(img, 0, 0, photoCanvas.width, photoCanvas.height);
 
-  // 窓の穴を開ける（destination-out = 消しゴム）
-  const rx = winRect.x * W, ry = winRect.y * H;
-  const rw = winRect.w * W, rh = winRect.h * H;
-  const r  = 8; // 角丸
+  const rx = winRect.x * photoCanvas.width;
+  const ry = winRect.y * photoCanvas.height;
+  const rw = winRect.w * photoCanvas.width;
+  const rh = winRect.h * photoCanvas.height;
+  const r  = 8;
+
   pCtx.globalCompositeOperation = "destination-out";
   pCtx.beginPath();
-  pCtx.moveTo(rx + r, ry);
-  pCtx.lineTo(rx + rw - r, ry);
-  pCtx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+r);
-  pCtx.lineTo(rx + rw, ry + rh - r);
-  pCtx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-r, ry+rh);
-  pCtx.lineTo(rx + r, ry + rh);
-  pCtx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-r);
-  pCtx.lineTo(rx, ry + r);
-  pCtx.quadraticCurveTo(rx, ry, rx+r, ry);
+  pCtx.moveTo(rx+r, ry); pCtx.lineTo(rx+rw-r, ry);
+  pCtx.quadraticCurveTo(rx+rw,ry, rx+rw,ry+r);
+  pCtx.lineTo(rx+rw, ry+rh-r);
+  pCtx.quadraticCurveTo(rx+rw,ry+rh, rx+rw-r,ry+rh);
+  pCtx.lineTo(rx+r, ry+rh);
+  pCtx.quadraticCurveTo(rx,ry+rh, rx,ry+rh-r);
+  pCtx.lineTo(rx, ry+r);
+  pCtx.quadraticCurveTo(rx,ry, rx+r,ry);
   pCtx.closePath();
   pCtx.fill();
   pCtx.globalCompositeOperation = "source-over";
-
-  // 窓枠（ハイライト）
-  pCtx.strokeStyle = "rgba(255,255,255,0.3)";
-  pCtx.lineWidth   = 1.5;
-  pCtx.beginPath();
-  pCtx.moveTo(rx + r, ry);
-  pCtx.lineTo(rx + rw - r, ry);
-  pCtx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+r);
-  pCtx.lineTo(rx + rw, ry + rh - r);
-  pCtx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-r, ry+rh);
-  pCtx.lineTo(rx + r, ry + rh);
-  pCtx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-r);
-  pCtx.lineTo(rx, ry + r);
-  pCtx.quadraticCurveTo(rx, ry, rx+r, ry);
-  pCtx.closePath();
-  pCtx.stroke();
 }
 
 let photoImg = null;
@@ -217,7 +197,7 @@ if (photoUrl) {
   img.src = photoUrl;
 }
 
-// ── Splat 読み込み ────────────────────────────────
+// ── Splat 読み込み ────────────────────────────────────────
 const splatURL = `/assets/splats/${talentId}.compressed.ply`;
 let splatMesh  = null;
 
@@ -244,7 +224,7 @@ try {
   document.getElementById("error-panel").style.display = "flex";
 }
 
-// ── ジャイロ（パノラマ視差モード） ────────────────
+// ── ジャイロ ─────────────────────────────────────────────
 const isTouch  = "ontouchstart" in window;
 const hint     = document.getElementById("hint");
 const gyroBtn  = document.getElementById("gyro-btn");
@@ -252,18 +232,13 @@ let gyroActive = false;
 let calibrated = false;
 let baseBeta   = 0, baseGamma = 0;
 let targetPanX = 0, targetPanY = 0;
-const PAN_SCALE = 0.012; // 傾き感度
-const PAN_LIMIT = 1.2;   // 最大移動量
+const PAN_SCALE = 0.012;
+const PAN_LIMIT = 1.2;
 
 function onOrientation(e) {
   const beta  = e.beta  ?? 0;
   const gamma = e.gamma ?? 0;
-  if (!calibrated) {
-    baseBeta  = beta;
-    baseGamma = gamma;
-    calibrated = true;
-    return;
-  }
+  if (!calibrated) { baseBeta = beta; baseGamma = gamma; calibrated = true; return; }
   targetPanX = THREE.MathUtils.clamp((gamma - baseGamma) * PAN_SCALE, -PAN_LIMIT, PAN_LIMIT);
   targetPanY = THREE.MathUtils.clamp((beta  - baseBeta)  * PAN_SCALE * -1, -PAN_LIMIT * 0.6, PAN_LIMIT * 0.6);
 }
@@ -271,14 +246,11 @@ function onOrientation(e) {
 async function enableGyro() {
   if (typeof DeviceOrientationEvent?.requestPermission === "function") {
     const perm = await DeviceOrientationEvent.requestPermission().catch(() => "denied");
-    if (perm !== "granted") {
-      alert("ジャイロの許可が必要です。設定から許可してください。");
-      return;
-    }
+    if (perm !== "granted") { alert("ジャイロの許可が必要です。"); return; }
   }
   window.addEventListener("deviceorientation", onOrientation, true);
   gyroActive = true;
-  orbit.enabled = false;        // ← OrbitControlsを無効化
+  orbit.enabled    = false;
   orbit.autoRotate = false;
   gyroBtn.style.display = "none";
   hint.textContent = "📱 スマホを傾けると視点が変わります";
@@ -287,12 +259,10 @@ async function enableGyro() {
 
 if (isTouch) {
   if (typeof DeviceOrientationEvent?.requestPermission === "function") {
-    // iOS: ボタンタップが必要
     gyroBtn.style.display = "block";
     gyroBtn.addEventListener("click", enableGyro);
     hint.textContent = "下のボタンでジャイロを有効にできます";
   } else {
-    // Android: 自動有効
     enableGyro();
     hint.textContent = "📱 スマホを傾けると視点が変わります";
     setTimeout(() => { hint.style.opacity = "0"; }, 4000);
@@ -302,12 +272,11 @@ if (isTouch) {
   setTimeout(() => { hint.style.opacity = "0"; }, 3000);
 }
 
-// ── レンダーループ ────────────────────────────────
+// ── レンダーループ ────────────────────────────────────────
 const clock = new THREE.Clock();
 threeRenderer.setAnimationLoop(() => {
   clock.getDelta();
   if (gyroActive) {
-    // カメラをパン（視差）
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetPanX, 0.07);
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetPanY + 0.3, 0.07);
     camera.position.z = 3;
@@ -319,7 +288,6 @@ threeRenderer.setAnimationLoop(() => {
   threeRenderer.render(scene, camera);
 });
 
-// ── リサイズ ──────────────────────────────────────
 window.addEventListener("resize", () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h;
